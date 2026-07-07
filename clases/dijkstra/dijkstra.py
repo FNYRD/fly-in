@@ -77,16 +77,16 @@ class Dijkstra:
                 if not neighbor or neighbor.zone_type == "blocked":
                     continue
                 accumulated_cost = cost + self.real_cost(neighbor)
-                if (self.reservations and not neighbor.relevant and
-                    (self.reservations.get(accumulated_cost, {}).get(neighbor.name, 0) + 1 >
-                     neighbor.max_drones)):
-                    continue
                 if (self.reservations and
                     (self.reservations.get((accumulated_cost - 1
                                             if neighbor.zone_type == "restricted"
                                             else accumulated_cost),
                                            {}).get(conn.name, 0) + 1 >
                         conn.max_link_capacity)):
+                    continue
+                if (self.reservations and not neighbor.relevant and
+                    (self.reservations.get(accumulated_cost, {}).get(neighbor.name, 0) + 1 >
+                     neighbor.max_drones)):
                     continue
                 if (neighbor, accumulated_cost) not in distances:
                     distances[(neighbor, accumulated_cost)] = accumulated_cost

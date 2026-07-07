@@ -279,9 +279,19 @@ Fly-In/
 
 Ver `PROJECT.md` (sección Bloque 3) para el estado exacto y las decisiones abiertas. En orden:
 
-1. **Bloque 3 — punto 3: arista de espera** `(N,T)→(N,T+1)` en el bucle de `dijkstra`. Decisiones que toma el estudiante: cuándo dispararla (propuesto: solo si un vecino se bloqueó por lleno este turno) y un tope de turnos para terminación.
+1. **Bloque 3 — punto 3: arista de espera** `(N,T)→(N,T+1)` en el bucle de `dijkstra`.
+   - **Mecanismo ya decidido (2026-07-07):** cuando `poped` agota todas sus conexiones sin ningún `heappush` exitoso, se empuja `(poped, cost+1)` al heap y se registra en `previous`, igual que un vecino normal.
+   - **Sigue abierto — tope de turnos:** necesario para garantizar terminación (si algo está lleno para siempre, la espera se repetiría infinitamente). Se descartaron: tope fijo arbitrario, y `2×path(D1)` o `2×path(dron_anterior)` — ambos fallan contra los mapas de congestión extrema del subject (Capacity hell, Impossible Dream), donde la espera real puede superar ampliamente el doble por efectos de saturación no lineales (teoría de colas). **Tarea para el siguiente agente:** buscar con el estudiante una base matemática/estructural para el tope (función del grafo, no del resultado de drones anteriores) y validarla contra esos mapas antes de implementar. Detalle completo en `PROJECT.md`.
 2. Partir las 5 líneas E501 y tests del Bloque 3.
 3. **Bloque 4 — Simulation:** es quien **produce** `reservations` (`Dict[int, Dict[str, int]]` plano). Diseñar cómo la construye turno a turno y la pasa a Dijkstra por cada dron. De aquí depende poder probar de verdad la etapa de reservas.
 4. Menores: `get_connection_to` en `Zone`/`Graph`; revisar dead code `drone_in/out/is_full`.
+
+> [!important] Instrucción para el próximo agente — primer mensaje de la sesión
+> Al retomar, el primer mensaje al estudiante debe:
+> 1. Resumir lo que ya se acordó (mecanismo de la arista de espera, punto 1 de arriba).
+> 2. Resumir lo que queda por resolver (el tope de turnos — ver detalle en `PROJECT.md`, sección Bloque 3).
+> 3. Discutir con el estudiante las líneas concretas a escribir en `dijkstra.py` para el mecanismo de espera.
+> 4. Una vez acordadas, comentarlas (qué hace cada línea) y luego escribirlas.
+> Recordar: el estudiante escribe el código; el agente no lo escribe por su cuenta sin acordarlo antes línea a línea (regla de trabajo repetida por el estudiante).
 
 > [!important] Regla de trabajo (repetida por el estudiante): NO proponer soluciones ni escribir código — el estudiante propone diseño/código primero, el agente solo analiza y señala. Ver `SYSTEM.md`.

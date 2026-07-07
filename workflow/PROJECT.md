@@ -331,7 +331,25 @@ Archivo: `clases/dijkstra/dijkstra.py`. Método `dijkstra() -> List[Union[Zone, 
 - [x] **Punto 4** — stop en `poped == end`; `rebuild((poped, cost), previous)` camina tuplas.
 
 **Pendiente:**
-- [ ] **Punto 3 — arista de espera** `(N,T)→(N,T+1)`. NO implementada. Decisiones abiertas: **cuándo dispararla** (propuesto: solo si un vecino se bloqueó por lleno este turno; sin reservas no hace falta) y un **tope de turnos** para garantizar terminación (si algo está lleno para siempre → dar inalcanzable).
+- [ ] **Punto 3 — arista de espera** `(N,T)→(N,T+1)`. NO implementada.
+
+> [!info] Decisión tomada (2026-07-07) — mecanismo de la espera
+> Cuándo dispararla: cuando `poped` agota el `for conn in poped.connections` (línea 75) sin haber hecho **ningún** `heappush` exitoso (todos los vecinos fallaron por `blocked` o por capacidad llena). En ese caso, en vez de dejar morir el estado, se hace `heappush(priority, (cost + 1, self.penalty(poped), poped))` y se registra `previous[(poped, cost + 1)] = (poped, cost)` — igual que con un vecino normal — para que `rebuild` pueda reconstruir el turno de espera (se ve como la misma `Zone` repetida, consistente con el diseño ya fijado en `Drone.path`).
+>
+> Sin esto, el estado `(poped, cost)` simplemente desaparece si todos sus vecinos están ocupados, y el algoritmo depende de que otra rama del heap resuelva el problema — puede producir `ValueError` (inalcanzable) en casos que en realidad solo necesitaban esperar.
+
+> [!warning] Pendiente sin resolver — tope de turnos (necesario para terminación)
+> Sin tope, si algo está lleno **para siempre** (deadlock real), la espera generaría `(poped, cost+1)`, `(cost+2)`... infinitamente y el `while` nunca terminaría. Hace falta un límite que corte y lance `ValueError` cuando se supera.
+>
+> **Candidatos descartados en discusión (2026-07-07):**
+> - Tope fijo arbitrario (`100`, etc.) — no tiene justificación, puede ser muy tacaño o muy generoso según el mapa.
+> - `2 × path(D1)` (path sin congestión, como referencia fija) — descartado: los mapas difíciles del subject (**Capacity hell**, 12 drones, ≤35 turnos; **Impossible Dream**, 25 drones, <45 turnos) están diseñados para forzar esperas mucho mayores al doble del camino ideal sin congestión. Un tope fijo en 2x rechazaría soluciones válidas en esos mapas.
+> - `2 × path(dron_anterior)`, encadenado dron a dron (adaptativo, no fijo a D1) — mejora sobre el anterior porque no depende de un valor congelado, pero tiene un contraejemplo de teoría de colas: cerca de la saturación de una conexión/zona de capacidad limitada, un solo dron adicional puede provocar un salto no lineal (efecto "acantilado") — p.ej. forzar un desvío por una ruta alternativa mucho más larga, o una espera mucho mayor al doble — sin que eso signifique deadlock real. El supuesto "un dron más no debería duplicar la espera del anterior" no está garantizado por la estructura del problema, solo por intuición.
+>
+> **D1 no necesita tope:** al no existir drones previos, `reservations` está vacío para D1 → ningún vecino puede estar lleno → el mecanismo de espera nunca se dispara → D1 termina con el Dijkstra normal (inalcanzable real se detecta igual, sin tope).
+>
+> **Para el siguiente agente:** explorar si existe una forma matemática/estructural de calcular el tope (p.ej. en función del grafo: nº de zonas, capacidades, nº de drones activos) en vez de encadenar el resultado real del dron anterior — y si es posible, validar la hipótesis contra mapas tipo Capacity hell / Impossible Dream antes de comprometerse con una fórmula.
+
 - [ ] **E501** en 5 líneas de código (10, 19, 33, 81, 86) — partir.
 - [ ] **Tests del Bloque 3.**
 - [ ] Menores: método `get_connection_to(other)` en `Zone`/`Graph` (lo necesita Simulation para hallar la conn entre 2 zonas consecutivas del path); posible dead code `drone_in`/`drone_out`/`is_full`/`drone_count` en Zone/Connection (revisar al diseñar Bloque 4 — si `reservations` cubre la ocupación, se borran con sus tests del Bloque 1).

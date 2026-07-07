@@ -11,6 +11,5 @@ las zonas y las conexiones para verificar qque no estan llenas y poder elegir la
 falta disenar el tema de la espera para que el algoritmo elija la opcion con menor coste, incluyendo esperar 
 si aplica. Tambien repasar como se va a reconstruir el camino si siempre agrego tuplas al heap y a previous
 cuando no estan llenas las zonas y las connections,
-me pierdo un poco en los ultimos cambios. como por ejemplo no recuerdo porque reviso esto: if (neighbor, accumulated_cost) not in distances:
 |-> Aqui continuar
 
