@@ -1,0 +1,16 @@
+Hasta ahorita solo:
+
+cambie todos los tipos para poder tener unicidad con los turno. Se convirtieron en tuplas
+asi cada que un turno cambia pero la zona no, se puede tomar como un turno unico. Aunque 
+me falta repasar un poco mas esos puntos porque cada sesion los entiendo pero cuendo paro y vuelvo
+no recuerdo casi nada.
+
+los cambios hechos toman en cuenta que start y end no tienen maximo de capacidad, se revisan
+las zonas y las conexiones para verificar qque no estan llenas y poder elegir la correcta
+
+falta disenar el tema de la espera para que el algoritmo elija la opcion con menor coste, incluyendo esperar 
+si aplica. Tambien repasar como se va a reconstruir el camino si siempre agrego tuplas al heap y a previous
+cuando no estan llenas las zonas y las connections,
+me pierdo un poco en los ultimos cambios. como por ejemplo no recuerdo porque reviso esto: if (neighbor, accumulated_cost) not in distances:
+|-> Aqui continuar
+
