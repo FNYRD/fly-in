@@ -330,33 +330,69 @@ Archivo: `clases/dijkstra/dijkstra.py`. Método `dijkstra() -> List[Union[Zone, 
 - [x] **Punto 2** — al evaluar vecino: consulta `reservations` con `.get(turno, {}).get(nombre, 0)`. Zona en turno de **llegada** (`accumulated_cost`), exime start/end vía `not neighbor.relevant`. Conexión en `cost+1` (tránsito). `reservations` ya tipado `Dict[int, Dict[str, int]]` (plano).
 - [x] **Punto 4** — stop en `poped == end`; `rebuild((poped, cost), previous)` camina tuplas.
 
-**Pendiente:**
-- [ ] **Punto 3 — arista de espera** `(N,T)→(N,T+1)`. NO implementada.
+- [x] **Punto 3 — arista de espera** `(N,T)→(N,T+1)`. Implementada (2026-07-08).
 
 > [!info] Decisión tomada (2026-07-07) — mecanismo de la espera
 > Cuándo dispararla: cuando `poped` agota el `for conn in poped.connections` (línea 75) sin haber hecho **ningún** `heappush` exitoso (todos los vecinos fallaron por `blocked` o por capacidad llena). En ese caso, en vez de dejar morir el estado, se hace `heappush(priority, (cost + 1, self.penalty(poped), poped))` y se registra `previous[(poped, cost + 1)] = (poped, cost)` — igual que con un vecino normal — para que `rebuild` pueda reconstruir el turno de espera (se ve como la misma `Zone` repetida, consistente con el diseño ya fijado en `Drone.path`).
 >
 > Sin esto, el estado `(poped, cost)` simplemente desaparece si todos sus vecinos están ocupados, y el algoritmo depende de que otra rama del heap resuelva el problema — puede producir `ValueError` (inalcanzable) en casos que en realidad solo necesitaban esperar.
 
-> [!warning] Pendiente sin resolver — tope de turnos (necesario para terminación)
-> Sin tope, si algo está lleno **para siempre** (deadlock real), la espera generaría `(poped, cost+1)`, `(cost+2)`... infinitamente y el `while` nunca terminaría. Hace falta un límite que corte y lance `ValueError` cuando se supera.
+> [!success] RESUELTO (2026-07-08) — tope de turnos
+> Se descartaron `2×path(D1)` y `2×path(dron_anterior)` encadenado (ver histórico abajo) por no aguantar los mapas de congestión extrema (Capacity hell, Impossible Dream). Solución final, con base estructural (no en el resultado de otro dron):
 >
-> **Candidatos descartados en discusión (2026-07-07):**
-> - Tope fijo arbitrario (`100`, etc.) — no tiene justificación, puede ser muy tacaño o muy generoso según el mapa.
-> - `2 × path(D1)` (path sin congestión, como referencia fija) — descartado: los mapas difíciles del subject (**Capacity hell**, 12 drones, ≤35 turnos; **Impossible Dream**, 25 drones, <45 turnos) están diseñados para forzar esperas mucho mayores al doble del camino ideal sin congestión. Un tope fijo en 2x rechazaría soluciones válidas en esos mapas.
-> - `2 × path(dron_anterior)`, encadenado dron a dron (adaptativo, no fijo a D1) — mejora sobre el anterior porque no depende de un valor congelado, pero tiene un contraejemplo de teoría de colas: cerca de la saturación de una conexión/zona de capacidad limitada, un solo dron adicional puede provocar un salto no lineal (efecto "acantilado") — p.ej. forzar un desvío por una ruta alternativa mucho más larga, o una espera mucho mayor al doble — sin que eso signifique deadlock real. El supuesto "un dron más no debería duplicar la espera del anterior" no está garantizado por la estructura del problema, solo por intuición.
+> - `max_turn = max(self.reservations.keys(), default=0) if self.reservations else 0` — turno máximo global con datos reales en `reservations`. Por construcción (cada dron ocupa una zona en cada turno de su path, incluso esperando), más allá de `max_turn` no puede existir ninguna reserva — `reservations.get(turno, {})` da `{}` de forma confiable y permanente a partir de ahí.
+> - `n_zone = len(self.graph.zones)` — presupuesto de **movimientos** (no turnos de calendario) disponibles una vez pasada la congestión. Un camino simple (sin repetir zona) tiene como máximo `n_zonas` zonas visitadas, así que este presupuesto alcanza sin importar cuántas zonas del camino sean `restricted`.
+> - `last_cost` (inicia en `0`) trackea el último `cost` en que se decrementó, para decrementar `n_zone` solo cuando `cost` avanza a un valor **nuevo** (no en cada `heappop`, que puede repetir el mismo turno en ramas distintas).
+> - Condición dentro del `while`, tras sacar `poped`: `if cost > max_turn and cost > last_cost: last_cost = cost; n_zone -= 1`, seguido de `if n_zone < 1: raise ValueError(...)`.
 >
-> **D1 no necesita tope:** al no existir drones previos, `reservations` está vacío para D1 → ningún vecino puede estar lleno → el mecanismo de espera nunca se dispara → D1 termina con el Dijkstra normal (inalcanzable real se detecta igual, sin tope).
+> **Nota importante (restricted no cuenta doble):** el contador mide movimientos, no turnos — entrar a una zona `restricted` salta `cost` en +2 en vez de +1, pero sigue siendo **un solo** avance de `last_cost` → decrementa `n_zone` en 1, igual que una zona normal. No hay que sumar nada extra por zonas restricted ni duplicar `n_zonas`; el salto de coste ya quedó reflejado en el propio `cost`, no en el contador de movimientos.
 >
-> **Para el siguiente agente:** explorar si existe una forma matemática/estructural de calcular el tope (p.ej. en función del grafo: nº de zonas, capacidades, nº de drones activos) en vez de encadenar el resultado real del dron anterior — y si es posible, validar la hipótesis contra mapas tipo Capacity hell / Impossible Dream antes de comprometerse con una fórmula.
+> **D1 no necesita caso especial:** con `reservations` vacío, `max_turn = 0`, así que el contador se activa desde el primer turno real — mismo mecanismo sirve para todos los drones, congestionados o no, sin lógica separada.
+>
+> <details><summary>Histórico de candidatos descartados (2026-07-07)</summary>
+>
+> - Tope fijo arbitrario (`100`, etc.) — sin justificación.
+> - `2×path(D1)` — los mapas difíciles (Capacity hell 12 drones ≤35 turnos; Impossible Dream 25 drones <45 turnos) fuerzan esperas muy superiores al doble del camino ideal.
+> - `2×path(dron_anterior)` encadenado — mejor que el anterior, pero vulnerable al "efecto acantilado" de teoría de colas cerca de la saturación (un dron más puede forzar un desvío/espera desproporcionada sin ser deadlock real).
+> </details>
 
-- [ ] **E501** en 5 líneas de código (10, 19, 33, 81, 86) — partir.
-- [ ] **Tests del Bloque 3.**
+**Refactors acordados junto con el tope — todos implementados (2026-07-08):**
+- [x] `congested_area(...) -> bool` — condiciones de bloqueo por capacidad extraídas a método propio, con `return False` explícito al final (corregido tras detectar que faltaba y rompía mypy).
+- [x] Contador de pushes exitosos por vecino (`pushed`, reset a 0 antes del `for`, +1 en cada `heappush` real); si al terminar el `for` sigue en 0 → arista de espera. Sin comprobar duplicados en `distances`/`Set` antes de este push — decidido por simplicidad; no afecta corrección.
+- [x] `distances` cambiado de `Dict[Tuple[Zone,int], int]` a `Set[Tuple[Zone,int]]`.
+
+**Bug detectado y corregido en revisión (2026-07-08):** `self.max_turn` en `__init__` llamaba `reservations.keys()` sin proteger el caso `reservations=None` (el caso real de D1) → crasheaba con `AttributeError`. Corregido: `max(reservations.keys(), default=0) if reservations else 0`.
+
+**Confirmado:** `self.max_moves` se muta directamente sobre `self` dentro de `dijkstra()` (no en variable local) — es seguro porque el diseño de Simulation (Bloque 4) crea una instancia **nueva** de `Dijkstra` por cada dron (nunca se reutiliza el mismo objeto para más de un cálculo), así que no hay riesgo de arrastrar estado entre llamadas.
+
+**Pendiente:**
+- [x] **E501** — resuelto (2026-07-08): las 2 líneas largas en `congested_area` (antes 194 y 155 caracteres) se partieron, extrayendo `conn_turn` como variable intermedia. `flake8 dijkstra.py` limpio.
+- [x] **mypy** — limpio sobre la lógica del archivo. Los 3 `import-not-found` que salen al correr `mypy dijkstra.py` desde `clases/dijkstra/` son esperados: es el problema ya conocido de que los archivos viven en subdirectorios (`clases/graph/...`) en vez de la raíz del repo — se resuelve solo al mover todo a la raíz en FASE 3 (ver Checklist subject). No es un bug de tipado real; correr `mypy .` desde la raíz del proyecto no debería mostrarlo.
+- [x] **Tests del Bloque 3** — escrito (`tests/test_bloque_3.py`) y **aprobado por el estudiante**, pero **NO EJECUTADO TODAVÍA** — ver bloqueo crítico justo abajo. Es lo primero que hay que resolver al retomar.
 - [ ] Menores: método `get_connection_to(other)` en `Zone`/`Graph` (lo necesita Simulation para hallar la conn entre 2 zonas consecutivas del path); posible dead code `drone_in`/`drone_out`/`is_full`/`drone_count` en Zone/Connection (revisar al diseñar Bloque 4 — si `reservations` cubre la ocupación, se borran con sus tests del Bloque 1).
+
+> [!danger] BLOQUEO CRÍTICO (2026-07-08) — Zone/Connection no se pueden importar en tiempo real
+> `clases/graph/zone.py` y `clases/graph/connection.py` importan la clase del otro solo bajo `if TYPE_CHECKING:` (para evitar el import circular), pero la usan como anotación de tipo real en las firmas (`def add_connection(self, connection: Connection) -> None`). Python evalúa esas anotaciones en tiempo de ejecución por defecto, y como `Connection`/`Zone` nunca quedan importadas de verdad fuera de `TYPE_CHECKING` (que es `False` en runtime), **revienta con `NameError` al definir la clase**.
+>
+> ```
+> NameError: name 'Connection' is not defined
+> ```
+>
+> **Esto bloquea absolutamente todo** — ni siquiera `tests/test_bloque_1.py` (ya existente, de Bloque 1) se puede ejecutar. `mypy`/`flake8` no lo detectan porque analizan el código sin ejecutarlo, por eso pasó desapercibido hasta ahora a pesar de que Bloque 1 ya estaba "hecho y testeado".
+>
+> **Arreglo de una sola línea por archivo:** agregar `from __future__ import annotations` al principio de `zone.py` y `connection.py` (antes de cualquier otro import) — difiere la evaluación de anotaciones a texto en vez de evaluarlas en el momento de definir la clase.
+>
+> **Es lo primero que hay que hacer al retomar la sesión**, antes de nada más: el estudiante debe aplicar ese fix (una línea en cada archivo), y recién ahí se puede correr `tests/test_bloque_3.py` para confirmar que los valores esperados que se calcularon a mano (turnos, longitud de path, etc.) coinciden con la ejecución real. Los tests están escritos y aprobados conceptualmente, pero **sus números nunca fueron verificados corriendo el código** por este bloqueo.
+
+**Dos hallazgos ya anotados dentro de `tests/test_bloque_3.py` (como prints `[HALLAZGO]`), a discutir con el estudiante — no corregidos, decisión pendiente de él:**
+1. **`rebuild()` colapsa esperas consecutivas en `start`.** La condición `if unpacked_before == self.start: break` (en `rebuild`) corta la reconstrucción apenas encuentra CUALQUIER predecesor cuya zona sea `self.start`, sin importar el turno de ese estado. Con **una sola** espera en `start` no pasa nada (el turno 0 no es un turno real). Pero con **dos o más esperas seguidas** en `start`, las esperas intermedias nunca se recorren y el path devuelto queda más corto que los turnos reales transcurridos — desalineando `Drone.get_position(turno)` para todo lo que sigue. Test que lo demuestra: `run_cascading_congestion_stress_case` (sección 8 de `test_bloque_3.py`) — espera fallar la comprobación de longitud a propósito, para dejar el hallazgo documentado en el output.
+2. **El `ValueError("Unreacheble end node")` final puede ser código muerto.** Como la arista de espera se dispara sin condición cada vez que `pushed == 0` (incluso si el nodo no tiene ninguna conexión), el heap nunca se vacía espontáneamente — siempre hay un estado de espera pendiente. Esto significa que el único disparador real de "inalcanzable" pasa a ser el tope de `max_moves`, no el `if poped != self.end: raise ValueError("Unreacheble end node")` al final de `dijkstra()`. Test que lo expone: `run_unreachable_end_case` (sección 7) — el mensaje de excepción capturado probablemente sea el de `max_moves`, no el de "Unreacheble end node".
 
 **Depende de Bloque 4:** la etapa de reservas solo se prueba de verdad cuando `Simulation` **produzca** `reservations`. Dijkstra la recibe como snapshot estático (solo lee); Simulation la posee y la actualiza tras cada dron. Estructura plana: `Dict[int, Dict[str, int]]` = `[turno][nombre]=count`.
 
 **Conceptos ya asentados con el estudiante:** Dijkstra no "camina" (los pops saltan, `previous` mantiene el árbol); turno = coste acumulado; espera = arista que compite por coste; el mismo estado `(zona,turno)` siempre cuesta lo mismo (por eso el guard es de novedad, no de coste).
+
+**Decisión del estudiante para Bloque 4 (2026-07-08):** a partir de Bloque 4 (Simulation), los tests van a escribirse con un **framework de testing recomendado por el subject**, no con el estilo manual/print de Bloques 1-3. Pendiente: revisar el PDF del subject (no solo `HANDOFF.md`, que no menciona ninguno explícitamente) para confirmar si recomienda alguno en particular; si no dice nada, el default razonable es `pytest`.
 
 ### Bloque 2 — Parser (en progreso)
 
