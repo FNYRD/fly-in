@@ -21,6 +21,22 @@
 - [ ] Enseñar al estudiante a usar frameworks de testing (pytest) en algún punto de Fase 2, y migrar los tests manuales a ese framework una vez que entienda la base.
 - [ ] Mejorar la descripcion del flujo que quiero en terminos de definir las bloques, mi propuesta y discusion
 
+- [ ] Cada explicacion debe darse usando escenas o situaciones de la vida real para mejor comprension de los conceptos y estas escena o situacion debe coincidir con el problema o tema que se esta tratando en el proyecto, en ese momento determinado
+
+- [ ] Cuando el agente realiza una tarea no es necesario dar una explicacion de los resultados caso sean positivos y la meta del test o la verificacion sea asegurar que algo funciona o no. solo en los casos en los que no funciona es donde se debe explicar donde y porque, ya que esto lleva a una solucion rapida, en los casos en que la respuesta es positiva, esta informacion solo es ruido que ofusca al estudiante
+
+- [ ] En la medida en que se toman decisiones de diseno y se van ejecutando, encontrando problemas y pensando en edge cases durante el desarrollo, si existe la posibilidad de generar un test legitimo sobre dicho escenario y asi llegar a la fase de test con camino adelantado debe hacerse. ya sea que el estudiante lo proponga o el agente lo detecte y el estudiante lo apruebe posterior a la propuesta del agente 
+
+- [ ] Los test se deben hacer de la siguiente manera: El agente y el estudiante los discuten teoricamente, luego de haber definido los casos, bloque por bloque el agente crea el codigo y el estudiante lo lee, entiende y aprueba o rechaza segun el caso
+
+- [ ] Pedirle al agente que cree un md llamado psicology.md. el agente debe apuntar alli todas las fortalezas y debilidades
+psicologicas e intelectuales que detecte conversando conmigo, en mi, para que a medida que avanzo me ayude a mejorar en las
+debilidades y a fortalecer las fortalezas, asi como tambien difcultades de aprendisaje y mejores maneras de que aprenda
+y razone
+
+
+
+
 ---
 
 ## Tests (por bloque) — propuesta para SYSTEM.md

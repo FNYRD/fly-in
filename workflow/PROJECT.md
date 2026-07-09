@@ -257,26 +257,33 @@ tags: [42, proyecto]
 |---|---|
 | Responsabilidad | Orquesta el cálculo de paths, gestiona reservas y genera el log de simulación |
 
-**Atributos:**
+**Atributos:** *(actualizado 2026-07-09 para reflejar la implementación real)*
 
 | Nombre | Tipo |
 |---|---|
 | `graph` | `Graph` |
 | `drones` | `List[Drone]` |
-| `reservations` | `Dict[int, Dict[str, int]]` |
-| `drone_reservations` | `Dict[str, Dict[int, Dict[str, int]]]` |
-| `simulation` | `Dict[int, Dict[str, str]]` |
+| `reservations` | `Union[Dict[int, Dict[str, int]], None]` |
+| `start` | `Union[Zone, None]` |
+| `end` | `Union[Zone, None]` |
+| `logs` | `List[List[str]]` |
 
-> `reservations[turno]["zona_o_conn"] = drone_count` (plano)
-> `drone_reservations["D1"]` = snapshot de reservas al momento de calcular D1
-> `simulation[turno]["D1"] = "zone_x"`
+> `reservations[turno]["zona_o_conn"] = drone_count` (plano). Tipado con `Union[..., None]` para calzar con el parámetro que espera `Dijkstra` (obliga a un guard de `None` al usarlo internamente).
+> `start`/`end` se resuelven en `__init__` con `next((z for z in graph.zones.values() if z.relevant == ...), None)` → de ahí el `Union[Zone, None]` (guard requerido antes de pasarlos a `Dijkstra`).
+> `logs[turno]` = lista de strings `"D1-zona"` / `"D1-conn"` para esa línea de output.
 
-**Métodos:**
+> [!note] Divergencia con el diseño original (2026-07-09)
+> Se **eliminó `drone_reservations`**: el snapshot de reservas por dron ahora vive dentro del propio `Drone` (vía `add_reservation`), era redundante tenerlo también acá.
+> Se reemplazó el atributo `simulation: Dict[int, Dict[str, str]]` por **`logs: List[List[str]]`** (misma info, representación por líneas de output en vez de dict anidado).
+
+**Métodos:** *(renombrados respecto al diseño original)*
 
 | Firma | Descripción |
 |---|---|
-| `calculate() -> None` | calcula paths de todos los drones en orden de prioridad, actualiza reservas y llena `simulation` |
-| `print_log() -> None` | imprime el log de simulación usando `self.simulation` |
+| `simulating(self) -> None` | orquesta: por cada dron instancia un `Dijkstra` nuevo, le pasa las `reservations` del momento, `add_path` + `add_reservation`, vuelca a `reservations` vía `calculating_reservations` y llena `logs`. (era `calculate`) |
+| `calculating_reservations(self, path) -> ...` | recorre el path de un dron y acumula su ocupación turno a turno en `self.reservations` (índice del path = turno de Dijkstra). Return por definir |
+| `get_connection(self, zone1, zone2) -> Connection` | helper para hallar la conn entre dos zonas consecutivas en movimientos **normales** (en restricted la conn ya viene en el path). **Pendiente:** mover a `Zone` como `get_connection_to`, y recibir objetos `Zone` en vez de `str` |
+| `output(self) -> None` | imprime `logs` línea por turno; omite drones que no se mueven (espera) y los ya entregados. (era `print_log`) |
 
 #### Dependencias
 
@@ -298,6 +305,11 @@ tags: [42, proyecto]
 ---
 
 ## FASE 2 — IMPLEMENTACIÓN
+
+> [!todo] Caso de test pendiente para Bloque 4 (Simulation) — anotado 2026-07-09
+> **Mapa:** `start → conn(cap 1) → R(restricted, cap 1) → end`, con **3 drones**.
+> **Verificar:** los tres transitan la conexión en turnos **1, 2, 3** (escalonados por la capacidad del link, no 1/3/5). La espera se hace en `start` (sin límite de aforo), NUNCA en la conexión — el subject prohíbe esperar en la conexión hacia una restricted (el tránsito es atómico: arranca → llega al turno siguiente).
+> **Por qué:** confirmar que Simulation alimenta `reservations` turno a turno bien, para que `congested_area` escalone por `conn_turn` (turno de tránsito) y por turno de **llegada** (`accumulated_cost`) por separado. Dijkstra ya razona bien; esto prueba la integración. Origen de la duda: distinción flujo (`max_link_capacity`) vs stock (`max_drones`).
 
 ### Bloque 1 — Modelo del grafo
 
@@ -368,31 +380,25 @@ Archivo: `clases/dijkstra/dijkstra.py`. Método `dijkstra() -> List[Union[Zone, 
 **Pendiente:**
 - [x] **E501** — resuelto (2026-07-08): las 2 líneas largas en `congested_area` (antes 194 y 155 caracteres) se partieron, extrayendo `conn_turn` como variable intermedia. `flake8 dijkstra.py` limpio.
 - [x] **mypy** — limpio sobre la lógica del archivo. Los 3 `import-not-found` que salen al correr `mypy dijkstra.py` desde `clases/dijkstra/` son esperados: es el problema ya conocido de que los archivos viven en subdirectorios (`clases/graph/...`) en vez de la raíz del repo — se resuelve solo al mover todo a la raíz en FASE 3 (ver Checklist subject). No es un bug de tipado real; correr `mypy .` desde la raíz del proyecto no debería mostrarlo.
-- [x] **Tests del Bloque 3** — escrito (`tests/test_bloque_3.py`) y **aprobado por el estudiante**, pero **NO EJECUTADO TODAVÍA** — ver bloqueo crítico justo abajo. Es lo primero que hay que resolver al retomar.
+- [x] **Tests del Bloque 3** — escrito, **ejecutado y APROBADO** (2026-07-09). Todo verde, `flake8` + `mypy` limpios. Bloque 3 cerrado.
 - [ ] Menores: método `get_connection_to(other)` en `Zone`/`Graph` (lo necesita Simulation para hallar la conn entre 2 zonas consecutivas del path); posible dead code `drone_in`/`drone_out`/`is_full`/`drone_count` en Zone/Connection (revisar al diseñar Bloque 4 — si `reservations` cubre la ocupación, se borran con sus tests del Bloque 1).
 
-> [!danger] BLOQUEO CRÍTICO (2026-07-08) — Zone/Connection no se pueden importar en tiempo real
-> `clases/graph/zone.py` y `clases/graph/connection.py` importan la clase del otro solo bajo `if TYPE_CHECKING:` (para evitar el import circular), pero la usan como anotación de tipo real en las firmas (`def add_connection(self, connection: Connection) -> None`). Python evalúa esas anotaciones en tiempo de ejecución por defecto, y como `Connection`/`Zone` nunca quedan importadas de verdad fuera de `TYPE_CHECKING` (que es `False` en runtime), **revienta con `NameError` al definir la clase**.
+> [!success] RESUELTO (2026-07-09) — bloqueo de import circular (Zone/Connection/Graph)
+> `zone.py`, `connection.py` y `graph.py` importaban la clase del otro solo bajo `if TYPE_CHECKING:` pero la usaban como anotación real en las firmas → `NameError` al definir la clase en runtime (`mypy`/`flake8` no lo detectan porque no ejecutan). Bloqueaba **todos** los tests, incluso Bloque 1.
 >
-> ```
-> NameError: name 'Connection' is not defined
-> ```
->
-> **Esto bloquea absolutamente todo** — ni siquiera `tests/test_bloque_1.py` (ya existente, de Bloque 1) se puede ejecutar. `mypy`/`flake8` no lo detectan porque analizan el código sin ejecutarlo, por eso pasó desapercibido hasta ahora a pesar de que Bloque 1 ya estaba "hecho y testeado".
->
-> **Arreglo de una sola línea por archivo:** agregar `from __future__ import annotations` al principio de `zone.py` y `connection.py` (antes de cualquier otro import) — difiere la evaluación de anotaciones a texto en vez de evaluarlas en el momento de definir la clase.
->
-> **Es lo primero que hay que hacer al retomar la sesión**, antes de nada más: el estudiante debe aplicar ese fix (una línea en cada archivo), y recién ahí se puede correr `tests/test_bloque_3.py` para confirmar que los valores esperados que se calcularon a mano (turnos, longitud de path, etc.) coinciden con la ejecución real. Los tests están escritos y aprobados conceptualmente, pero **sus números nunca fueron verificados corriendo el código** por este bloqueo.
+> **Fix aplicado:** `from __future__ import annotations` como primera línea en los **tres** archivos (`graph.py` había quedado sin el fix en la sesión anterior). Difiere la evaluación de anotaciones a texto. `TYPE_CHECKING` se mantiene (lo necesita mypy). Confirmado corriendo `tests/test_bloque_3.py` sin `NameError`.
 
-**Dos hallazgos ya anotados dentro de `tests/test_bloque_3.py` (como prints `[HALLAZGO]`), a discutir con el estudiante — no corregidos, decisión pendiente de él:**
-1. **`rebuild()` colapsa esperas consecutivas en `start`.** La condición `if unpacked_before == self.start: break` (en `rebuild`) corta la reconstrucción apenas encuentra CUALQUIER predecesor cuya zona sea `self.start`, sin importar el turno de ese estado. Con **una sola** espera en `start` no pasa nada (el turno 0 no es un turno real). Pero con **dos o más esperas seguidas** en `start`, las esperas intermedias nunca se recorren y el path devuelto queda más corto que los turnos reales transcurridos — desalineando `Drone.get_position(turno)` para todo lo que sigue. Test que lo demuestra: `run_cascading_congestion_stress_case` (sección 8 de `test_bloque_3.py`) — espera fallar la comprobación de longitud a propósito, para dejar el hallazgo documentado en el output.
-2. **El `ValueError("Unreacheble end node")` final puede ser código muerto.** Como la arista de espera se dispara sin condición cada vez que `pushed == 0` (incluso si el nodo no tiene ninguna conexión), el heap nunca se vacía espontáneamente — siempre hay un estado de espera pendiente. Esto significa que el único disparador real de "inalcanzable" pasa a ser el tope de `max_moves`, no el `if poped != self.end: raise ValueError("Unreacheble end node")` al final de `dijkstra()`. Test que lo expone: `run_unreachable_end_case` (sección 7) — el mensaje de excepción capturado probablemente sea el de `max_moves`, no el de "Unreacheble end node".
+**Dos hallazgos que estaban abiertos — RESUELTOS (2026-07-09):**
+1. **`rebuild()` colapsaba esperas consecutivas en `start` — CORREGIDO.** La condición `if unpacked_before == self.start: break` cortaba ante cualquier predecesor cuya zona fuera `start`, sin mirar el turno → con 2+ esperas seguidas en start (o esperas en start en general) el path quedaba más corto que los turnos reales. **Fix:** se reemplazó por un corte estructural `before = previous.get(after); if before is None: break` — camina hasta el único estado sin predecesor, que es la semilla `(start, 0)` (cada `heappush` va siempre con su `previous[...]`, así que ese es el único hueco). Ahora las esperas se reconstruyen completas y el largo del path coincide con los turnos reales. Verificado en secciones 4, 5, 6-A y 8 del test.
+2. **`raise ValueError("Unreacheble end node")` final — código muerto confirmado, se deja como red de seguridad.** La arista de espera se dispara siempre que `pushed == 0`, así que el heap no se vacía solo: el disparador real de "inalcanzable" es el tope de `max_moves` (`"Unreachable end node"`, typo corregido). El `raise` por heap vacío queda inalcanzable en la práctica; se mantiene como defensa por si un refactor futuro cambia la condición de espera. Decisión del estudiante: dejarlo.
 
 **Depende de Bloque 4:** la etapa de reservas solo se prueba de verdad cuando `Simulation` **produzca** `reservations`. Dijkstra la recibe como snapshot estático (solo lee); Simulation la posee y la actualiza tras cada dron. Estructura plana: `Dict[int, Dict[str, int]]` = `[turno][nombre]=count`.
 
 **Conceptos ya asentados con el estudiante:** Dijkstra no "camina" (los pops saltan, `previous` mantiene el árbol); turno = coste acumulado; espera = arista que compite por coste; el mismo estado `(zona,turno)` siempre cuesta lo mismo (por eso el guard es de novedad, no de coste).
 
-**Decisión del estudiante para Bloque 4 (2026-07-08):** a partir de Bloque 4 (Simulation), los tests van a escribirse con un **framework de testing recomendado por el subject**, no con el estilo manual/print de Bloques 1-3. Pendiente: revisar el PDF del subject (no solo `HANDOFF.md`, que no menciona ninguno explícitamente) para confirmar si recomienda alguno en particular; si no dice nada, el default razonable es `pytest`.
+**Decisión del estudiante para Bloque 4 (2026-07-08):** a partir de Bloque 4 (Simulation), los tests van a escribirse con un **framework de testing**, no con el estilo manual/print de Bloques 1-3. **Confirmado en el PDF del subject (§III.3, pág. 6, 2026-07-09):** *"Use frameworks like **pytest or unittest** for unit tests, covering edge cases."* → `pytest` es válido y recomendado por el propio subject. Duda cerrada.
+
+**Invariante crítico a respetar en Bloque 4 (Simulation) — anotado 2026-07-09:** al construir `reservations`, un dron reserva una zona **solo** los turnos en que su path lo pone ahí; el turno en que se mueve a la siguiente zona **ya no cuenta** en la anterior (cuenta en la destino). Esto implementa la regla del subject §VII.3 *"drones moving out free up capacity for that same turn"*. Sale automático si se recorre el path posición por posición (`get_position(turno)`), sin solapar dos zonas en el mismo turno. Si se violara (contar al dron en la zona el turno que la deja), se bloquearía injustamente al que llega en la llegada exacta. Test sugerido: A sale de una restricted en T y B entra a esa misma restricted en T → válido.
 
 ### Bloque 2 — Parser (en progreso)
 
@@ -434,6 +440,51 @@ Esqueleto del bucle listo y aprobado: guardia de línea vacía/comentario + cade
 
 ---
 
+### Bloque 4 — Simulation (EN PROGRESO — diseño de firmas/lógica, sin código real todavía)
+
+Archivo: `clases/simulation/simulation.py`. Estado: firmas y atributos definidos, cuerpos de métodos aún en pseudocódigo. **Pausado 2026-07-09** (el estudiante paró por cansancio).
+
+> [!danger] AL RETOMAR — primera decisión pendiente (L2/L3)
+> **El offset de `logs[0]` (la posición inicial `start` NO se imprime).** El ejemplo del subject arranca el output en el primer *movimiento*, no en `start`. Como el bucle de logs indexa por el índice `i` del path y el start es el índice 0, hay que decidir **una** de dos formas de evitar una primera línea en blanco:
+> - **(a)** `logs` con offset → usar `logs[i-1]`, o
+> - **(b)** indexar por `i` y en `output` saltar las sublistas vacías.
+> Esto es lo primero a resolver antes de seguir escribiendo `simulating`/`output`.
+
+#### Firmas (cerradas 2026-07-09)
+
+- `__init__(self, graph: Graph, drones: List[Drone]) -> None` — **se eliminó el parámetro `dijkstra`** (se instancia uno nuevo por dron dentro del método, no se reutiliza).
+- `simulating(self) -> None` — orquestador (era `calculate`).
+- `calculating_reservations(self, path: List[Union[Zone, Connection]]) -> ...` — vuelca la ocupación de un path a `self.reservations`. Return por definir (probablemente `-> None`, muta en sitio).
+- `get_connection(self, zone1, zone2) -> Connection` — helper. **Decisión tomada:** se moverá a `Zone` como `get_connection_to(other)` y recibirá objetos `Zone` (no `str`), porque quien lo llama ya tiene los objetos del path. Pendiente crear el método en `Zone`.
+- `output(self) -> None` — imprime `logs` (era `print_log`).
+
+#### Atributos (ver tabla en Fase 1, ya actualizada)
+
+`graph`, `drones`, `reservations: Union[Dict[int, Dict[str, int]], None]`, `start: Union[Zone, None]`, `end: Union[Zone, None]`, `logs: List[List[str]]`. Se eliminó `drone_reservations` (el snapshot vive en `Drone`) y `simulation` dict → `logs`.
+
+#### Decisiones de lógica ya tomadas
+
+- **`start`/`end`** se resuelven en `__init__` con `next((z for z in graph.zones.values() if z.relevant == "start_hub"/"end_hub"), None)`. Requiere **guard `if self.start and self.end`** antes de pasarlos a `Dijkstra` (que los pide `Zone`, no `Optional`). ✅ escrito.
+- **Orden de cálculo:** los drones se rutean en el orden de la lista (`D1, D2, …`), tal como los creó el Parser. D1 se rutea con `reservations = None`; a partir de D2 se pasa `self.reservations` acumulado + `add_reservation`.
+- **`add_path` recibe el PATH**, no el objeto Dijkstra: `add_path(Dijkstra(...).dijkstra())`. ✅ corregido.
+- **Indexado de `reservations` y `logs` por el índice `i` del path** = turno de Dijkstra (todos arrancan en `start` = coste 0 = índice 0; cada elemento = +1 turno; restricted = `Connection`+`Zone` = 2 elementos = +2). Confirmado alineado con lo que Dijkstra lee.
+- **`reservations`: se saltea `start`** al reservar (Dijkstra lo exime vía `not relevant`, no lo chequea).
+- **`get_connection` se llama solo en movimientos NORMALES** (en restricted la `Connection` ya viene intercalada en el path → se reserva sola al iterar). *(El estudiante ya corrigió la rama que estaba invertida.)*
+- **Omisión en el output:** un dron en **espera** (`path[i] == path[i-1]`) se omite de esa línea; un dron **entregado** deja de aparecer solo porque su path termina en `end`. El bucle debe arrancar en **`i = 1`** (en `i = 0`, `path[i-1]` sería `path[-1]` = `end`, bug de wrap-around).
+- **NOTA descartada:** poner `max_drones = float("inf")` en start/end NO hace falta (Dijkstra ya exime zonas `relevant`) y rompería el tipo `int`.
+
+#### Pendiente de escribir/decidir
+
+- [ ] **PRIMERO:** resolver el offset de `logs[0]` (L2/L3, ver danger arriba).
+- [ ] Patrón para crecer `logs`: `if i >= len(self.logs): self.logs.append([entry]) else: self.logs[i].append(entry)` — sin `logs[i].append` en la rama de creación (IndexError), sin corchetes de más.
+- [ ] Recordar `.name` al construir el string del log: `drone.path[i].name` (los elementos son objetos, no strings).
+- [ ] Crear `Zone.get_connection_to(other: Zone) -> Connection`.
+- [ ] Escribir los cuerpos reales (hoy son pseudocódigo + `return ...` placeholders).
+- [ ] Partir líneas E501 (diferido a propósito hasta tener el código).
+- [ ] Tests con `pytest` (framework confirmado por el subject) — incluir el caso de integración anotado arriba (mapa restricted, 3 drones → 1/2/3).
+
+---
+
 ## FASE 3 — INTEGRACIÓN Y VALIDACIÓN
 
 ### Tests de integración
@@ -468,3 +519,9 @@ Esqueleto del bucle listo y aprobado: guardia de línea vacía/comentario + cade
 - [ ] Subject releído por agente
 - [ ] Proyecto revisado contra requisitos
 - [ ] Reporte generado
+
+### Repaso final del estudiante (post-entrega)
+
+- [ ] **Armar un dossier del proyecto para Perplexity** que lo explique todo de cero, asumiendo que el estudiante habrá olvidado muchos detalles. El agente diseña la forma de empaquetar y entregar la info (qué archivos/código/decisiones incluir y en qué orden) para que Perplexity pueda dar una explicación clara y completa.
+  - **Prioridad de temas a que quede explicado bien:** el import circular resuelto con `from __future__ import annotations` + `TYPE_CHECKING` (por qué las anotaciones no se evalúan en runtime, por qué mypy sí las ve, por qué se necesitan ambos). Es lo que más cuesta recordar.
+  - Incluir también: Dijkstra turn-aware (turno = coste, arista de espera, tope `max_moves`), el modelo de `reservations` plano, y el invariante "moving out frees capacity same turn".

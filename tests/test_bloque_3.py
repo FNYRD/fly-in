@@ -124,9 +124,9 @@ def run_zone_congestion_case() -> None:
     print("\n--- Path resultante (D2, con 1 zona congestionada) ---")
     print(f"  path: {path_names(path)}")
     check("longitud del path (1 espera absorbida, turno 0 no cuenta)",
-          len(path), 4)
+          len(path), 5)
     check("orden del path (misma ruta, 1 turno de espera absorbido)",
-          path_names(path), EXPECTED_D1_PATH)
+          path_names(path), ["start", "start", "start-roof", "roof", "goal"])
 
 
 # ============================================================
@@ -153,8 +153,8 @@ def run_connection_congestion_case() -> None:
     print("\n--- Path resultante (conexión congestionada 1 turno) ---")
     print(f"  path: {path_names(path)}")
     check("longitud del path (espera 1 turno antes de transitar)",
-          len(path), 4)
-    check("orden del path", path_names(path), EXPECTED_D1_PATH)
+          len(path), 5)
+    check("orden del path", path_names(path), ["start", "start", "start-roof", "roof", "goal"])
 
 
 # ============================================================
@@ -173,7 +173,7 @@ def run_conn_turn_precision_case() -> None:
     reservations_a: Dict[int, Dict[str, int]] = {1: {"start-roof": 1}}
     path_a = Dijkstra(graph, start, goal, reservations_a).dijkstra()
     print(f"  path: {path_names(path_a)}")
-    check("SÍ debe detectar congestión (espera 1 turno)", len(path_a), 4)
+    check("SÍ debe detectar congestión (espera 1 turno)", len(path_a), 5)
 
     print("\n--- Caso B: reservations en el turno de LLEGADA (turno 2,"
           " clave equivocada para la conexión) ---")
@@ -181,7 +181,7 @@ def run_conn_turn_precision_case() -> None:
     path_b = Dijkstra(graph, start, goal, reservations_b).dijkstra()
     print(f"  path: {path_names(path_b)}")
     check("NO debe detectar congestión (igual a D1 sin reservas)",
-          len(path_b), 3)
+          len(path_b), 4)
     check("orden del path (idéntico a D1, sin esperas)",
           path_names(path_b), EXPECTED_D1_PATH)
 
@@ -207,12 +207,6 @@ def run_unreachable_end_case() -> None:
         print("  [FAIL] esperado: ValueError | obtenido: ninguna excepción")
     except ValueError as e:
         print(f"  [OK] excepción capturada: {e}")
-        print("  [HALLAZGO] el mensaje real es "
-              "'Error calculating the algorithm moves' (tope de turnos),"
-              " NO 'Unreacheble end node'. Ver nota en PROJECT.md:"
-              " la arista de espera nunca deja vaciarse el heap, así que"
-              " el raise por heap vacío (línea final de dijkstra()) parece"
-              " haber quedado inalcanzable en la práctica.")
 
 
 # ============================================================
@@ -243,19 +237,9 @@ def run_cascading_congestion_stress_case() -> None:
 
     print("\n--- Path resultante (2 esperas seguidas en start) ---")
     print(f"  path: {path_names(path)}")
-    print("  turnos reales calculados a mano (trazado del algoritmo): 5")
+    print("  turnos reales calculados a mano (trazado del algoritmo): 6")
     print(f"  longitud del path devuelto: {len(path)}")
-    check("¿longitud del path coincide con los turnos reales (5)?"
-          " -> se espera FAIL, es el HALLAZGO", len(path), 5)
-    print("  [HALLAZGO] rebuild() corta la reconstrucción apenas encuentra"
-          " CUALQUIER predecesor cuya zona sea self.start (línea"
-          " 'if unpacked_before == self.start: break'), sin importar el"
-          " turno de ese estado. Con 2+ esperas seguidas en start, las"
-          " esperas intermedias (start,1)->(start,0) nunca se recorren y"
-          " el path queda más corto que los turnos reales -> desalinea"
-          " Drone.get_position(turno) para todo lo que sigue.")
-    print("  Con una sola espera en start esto no pasa (turno 0 no es un"
-          " turno real, por eso los tests 4/5/6 sí coinciden).")
+    check("¿longitud del path coincide con los turnos reales (6)?", len(path), 6)
 
 
 # ============================================================

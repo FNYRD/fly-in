@@ -30,6 +30,8 @@ class Dijkstra:
         while 1:
             unpacked_after, _ = after
             before = previous.get(after)
+            if before is None:
+                break
             if before:
                 unpacked_before, _ = before
                 if unpacked_after.zone_type == "restricted":
@@ -39,8 +41,8 @@ class Dijkstra:
                             path.append(conn)
                             break
                 path.append(unpacked_before)
-                if unpacked_before == self.start:
-                    break
+                # if unpacked_before == self.start:
+                #     break
                 after = before
         path.reverse()
         return path
@@ -97,7 +99,7 @@ class Dijkstra:
                 last_cost = cost
                 self.max_moves -= 1
             if self.max_moves < 1:
-                raise ValueError("Error calculating the algorithm moves")
+                raise ValueError("Unreachable end node")
             visited.add((poped, cost))
             pushed = 0
             for conn in poped.connections:
@@ -120,7 +122,4 @@ class Dijkstra:
                 previous[(poped, cost + 1)] = (poped, cost)
             if poped == self.end:
                 break
-
-        if poped != self.end:
-            raise ValueError("Unreacheble end node")
         return self.rebuild((poped, cost), previous)

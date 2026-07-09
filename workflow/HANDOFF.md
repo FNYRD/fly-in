@@ -277,31 +277,32 @@ Fly-In/
 
 ### Siguiente paso
 
-**Bloque 3 — Dijkstra está funcionalmente completo y su archivo de tests (`tests/test_bloque_3.py`) ya está escrito y aprobado por el estudiante — pero nunca se pudo ejecutar.** Hay un bloqueo crítico sin relación con Dijkstra que impide correr absolutamente cualquier test del proyecto. Ver detalle completo en `PROJECT.md` (sección Bloque 3).
+**Bloque 3 — Dijkstra CERRADO (2026-07-09).** **Bloque 4 — Simulation EN PROGRESO** (mismo día): firmas y atributos definidos, cuerpos aún en pseudocódigo. El estudiante pausó por cansancio.
 
-> [!danger] PRIMER PASO OBLIGATORIO AL RETOMAR — antes de cualquier otra cosa
-> `clases/graph/zone.py` y `clases/graph/connection.py` importan la clase del otro solo bajo `if TYPE_CHECKING:`, pero la usan como anotación de tipo real en las firmas de métodos → `NameError: name 'Connection' is not defined` al importar, en tiempo de ejecución. Esto bloquea **todo** (incluso `tests/test_bloque_1.py`, que nunca se pudo correr). `mypy`/`flake8` no lo detectan (no ejecutan el código).
->
-> **Fix de una línea por archivo:** agregar `from __future__ import annotations` al principio de `zone.py` y `connection.py` (antes de los demás imports). El estudiante debe aplicarlo (regla: el código lo escribe él).
->
-> Una vez aplicado, correr `python tests/test_bloque_3.py` y confirmar que los valores esperados (calculados a mano durante el diseño del test) coinciden con la ejecución real.
+> [!danger] AL RETOMAR — primera decisión pendiente
+> El **offset de `logs[0]`** en `Simulation` (la posición inicial `start` no se imprime en el output → evitar una primera línea vacía). Dos opciones: (a) `logs[i-1]` con offset, o (b) indexar por `i` y saltar sublistas vacías en `output`. Ver detalle completo en `PROJECT.md` → Fase 2 → Bloque 4 (bloque `[!danger]` y sección "Pendiente de escribir/decidir"). **Es lo primero a resolver antes de seguir escribiendo `simulating`/`output`.**
 
-En orden, lo que sigue después de destrabar esto:
+El detalle fino de Bloque 4 (firmas cerradas, decisiones de lógica tomadas, y todo lo pendiente) está en `PROJECT.md`. Abajo queda el contexto general del proyecto.
 
-1. **Correr `tests/test_bloque_3.py`** y revisar los `[OK]`/`[FAIL]`. Dos `[FAIL]` son **esperados a propósito** (hallazgos ya documentados, no bugs del test):
-   - Sección 8 (`run_cascading_congestion_stress_case`): la longitud del path no va a coincidir con los turnos reales cuando hay 2+ esperas seguidas en `start` — bug real en `rebuild()` (ver `PROJECT.md`).
-   - Sección 7 (`run_unreachable_end_case`): el mensaje de la excepción probablemente sea el de `max_moves`, no `"Unreacheble end node"` — posible código muerto (ver `PROJECT.md`).
-   Discutir con el estudiante si/cómo corregir estos dos hallazgos antes de pasar a Bloque 4, o si se documentan como deuda técnica y se sigue adelante.
-2. **Bloque 4 — Simulation:** es quien **produce** `reservations` (`Dict[int, Dict[str, int]]` plano). Diseño ya confirmado: crea una instancia **nueva** de `Dijkstra` por cada dron (nunca reutiliza el objeto), le pasa el `reservations` actualizado de ese momento, y hace `drone.add_path(resultado)`. Esto también resuelve la duda que tuvo el estudiante sobre si `Drone` necesitaba un atributo de algoritmo — no lo necesita, es un contenedor de datos; `Simulation` orquesta.
-3. **Tests de Bloque 4 — CAMBIO DE CONVENCIÓN:** el estudiante decidió (2026-07-08) que a partir de aquí los tests usan un **framework recomendado por el subject**, no el estilo manual/print de Bloques 1-3. Falta revisar el PDF del subject para confirmar si menciona uno específico (no está en `HANDOFF.md` todavía); si no dice nada, usar `pytest` por default.
-4. Menores: `get_connection_to` en `Zone`/`Graph`; revisar dead code `drone_in/out/is_full`.
+> [!success] RESUELTO (2026-07-09) — lo que estaba bloqueado la sesión anterior
+> - **Import circular (`NameError` por `TYPE_CHECKING`):** arreglado con `from __future__ import annotations` en `zone.py`, `connection.py` **y `graph.py`** (este último había quedado sin el fix). `TYPE_CHECKING` se mantiene (lo necesita mypy).
+> - **Bug de `rebuild()` en `start`:** corregido con corte estructural `if before is None: break` (camina hasta la semilla `(start,0)`, único estado sin `previous`). Las esperas se reconstruyen completas.
+> - **Typo `Unreacheble`→`Unreachable`** y confirmado que ese `raise` es código muerto de la práctica (se deja como red de seguridad).
+> - **Expectativas del test** ajustadas: una espera suma un turno al path (antes se "absorbía" por el bug de rebuild).
+
+En orden, lo que sigue:
+
+1. **Bloque 4 — Simulation:** es quien **produce** `reservations` (`Dict[int, Dict[str, int]]` plano). Diseño ya confirmado: crea una instancia **nueva** de `Dijkstra` por cada dron (nunca reutiliza el objeto), le pasa el `reservations` actualizado de ese momento, y hace `drone.add_path(resultado)`. `Drone` es solo contenedor de datos; `Simulation` orquesta.
+   - **Invariante crítico (ver `PROJECT.md`):** al llenar `reservations`, un dron reserva una zona solo los turnos que su path lo pone ahí; el turno que se mueve, ya cuenta en la destino, no en la anterior (regla subject §VII.3 "moving out frees capacity that same turn"). Sale solo recorriendo el path posición por posición.
+   - **Caso de test de integración anotado (arriba en `PROJECT.md`, Fase 2):** mapa `start → conn(cap 1) → R(restricted, cap 1) → end`, 3 drones → deben transitar en turnos 1/2/3 (escalonados por la capacidad del link). Verifica que Simulation alimenta reservations bien.
+2. **Tests de Bloque 4 — framework:** confirmado en el subject (§III.3): `pytest` o `unittest`. Se usa `pytest` (no más estilo print de Bloques 1-3).
+3. Menores: `get_connection_to` en `Zone`/`Graph` (lo necesita Simulation para hallar la conn entre 2 zonas consecutivas del path); revisar dead code `drone_in/out/is_full/drone_count` en Zone/Connection (si `reservations` cubre la ocupación, se borran con sus tests del Bloque 1).
 
 > [!important] Instrucción para el próximo agente — primer mensaje de la sesión
 > Al retomar, el primer mensaje al estudiante debe:
-> 1. Recordarle que quedamos en el bloqueo de `Zone`/`Connection` (`NameError` por `TYPE_CHECKING`) — es el primer paso, antes que nada más.
-> 2. Confirmar que Bloque 3 (Dijkstra + tests) está implementado y aprobado, pendiente solo de ejecutarse tras el fix.
-> 3. Recordar los dos hallazgos ya documentados (rebuild/start, posible código muerto en "Unreacheble end node") para discutir una vez corran los tests.
-> 4. Mencionar el cambio de convención de testing para Bloque 4 (framework del subject, no prints).
-> Recordar: el estudiante escribe el código; el agente no lo escribe por su cuenta sin acordarlo antes línea a línea. Los tests sí los genera el agente (regla de `SYSTEM.md`), pero después de acordar conceptualmente los casos con el estudiante.
+> 1. Confirmar que **Bloque 3 quedó cerrado** (Dijkstra + tests verdes + lint limpio).
+> 2. Proponer arrancar con **Bloque 4 — Simulation**, recordando el invariante de reservations y el caso de test de integración (mapa restricted, 3 drones → 1/2/3).
+> 3. Recordar que los tests de Bloque 4 van con `pytest`.
+> Recordar: el estudiante escribe el código; el agente no lo escribe por su cuenta sin acordarlo antes línea a línea. Los tests sí los genera el agente (regla de `SYSTEM.md`), pero después de acordar conceptualmente los casos con el estudiante. **Regla repetida por el estudiante: NO proponer soluciones ni escribir código — él propone diseño/código primero, el agente solo analiza y señala.**
 
 > [!important] Regla de trabajo (repetida por el estudiante): NO proponer soluciones ni escribir código — el estudiante propone diseño/código primero, el agente solo analiza y señala. Ver `SYSTEM.md`.
