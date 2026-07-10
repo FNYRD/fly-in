@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from clases.graph.connection import Connection
-from typing import Union, List
+from typing import Union, List, Optional
 
 
 class Zone:
@@ -22,6 +22,12 @@ class Zone:
     def add_connection(self, connection: Connection) -> None:
         if connection not in self.connections:
             self.connections.append(connection)
+
+    def get_connection(self, zone_asked: Zone) -> Optional[Connection]:
+        for conn in self.connections:
+            if conn.get_otherside_zone(self) == zone_asked:
+                return conn
+        return None
 
     def drone_in(self) -> None:
         if self.drone_count < self.max_drones:

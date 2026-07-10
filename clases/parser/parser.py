@@ -12,31 +12,6 @@ class Parser:
         self.drones: List[Drone] = []
         self.start_end: List[str] = []
 
-    def manufacturing(self) -> Tuple[Graph, List[Drone]]:
-        line_processed: List[str]
-        with open(self.route, 'r', encoding='utf-8') as file:
-            for line in file:
-                line_processed = line.strip().split()
-                if not line_processed or line_processed[0] == "#":
-                    continue
-                if len(self.drones) == 0 and line_processed[0] != "nb_drones:":
-                    raise ValueError(
-                        "Drone's number declaration must be at the beginning of the file")
-                elif line_processed[0] == "nb_drones:":
-                    self._parse_drones(line_processed)
-                elif "hub" in line_processed[0]:
-                    if line_processed[0] not in ("hub:", "start_hub:", "end_hub:"):
-                        raise ValueError(f"Unknown name: {line_processed[0]}")
-                    self._parse_zones(line_processed)
-                elif line_processed[0] == "connection:":
-                    self._parse_connections(line_processed)
-                else:
-                    raise ValueError(f"Unknown line {line_processed}")
-            if len(self.start_end) != 2:
-                raise ValueError(
-                    "It's mandatory being only one start and one end hub")
-        return (self.graph, self.drones)
-
     def _parse_drones(self, line_processed: List[str]) -> None:
         n_drones: int = 0
         if len(self.drones):
@@ -145,3 +120,28 @@ class Parser:
         self.graph.add_connection(connection)
         z1.add_connection(connection)
         z2.add_connection(connection)
+
+    def manufacturing(self) -> Tuple[Graph, List[Drone]]:
+        line_processed: List[str]
+        with open(self.route, 'r', encoding='utf-8') as file:
+            for line in file:
+                line_processed = line.strip().split()
+                if not line_processed or line_processed[0] == "#":
+                    continue
+                if len(self.drones) == 0 and line_processed[0] != "nb_drones:":
+                    raise ValueError(
+                        "Drone's number declaration must be at the beginning of the file")
+                elif line_processed[0] == "nb_drones:":
+                    self._parse_drones(line_processed)
+                elif "hub" in line_processed[0]:
+                    if line_processed[0] not in ("hub:", "start_hub:", "end_hub:"):
+                        raise ValueError(f"Unknown name: {line_processed[0]}")
+                    self._parse_zones(line_processed)
+                elif line_processed[0] == "connection:":
+                    self._parse_connections(line_processed)
+                else:
+                    raise ValueError(f"Unknown line {line_processed}")
+            if len(self.start_end) != 2:
+                raise ValueError(
+                    "It's mandatory being only one start and one end hub")
+        return (self.graph, self.drones)

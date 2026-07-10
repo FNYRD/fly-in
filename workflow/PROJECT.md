@@ -381,7 +381,8 @@ Archivo: `clases/dijkstra/dijkstra.py`. Método `dijkstra() -> List[Union[Zone, 
 - [x] **E501** — resuelto (2026-07-08): las 2 líneas largas en `congested_area` (antes 194 y 155 caracteres) se partieron, extrayendo `conn_turn` como variable intermedia. `flake8 dijkstra.py` limpio.
 - [x] **mypy** — limpio sobre la lógica del archivo. Los 3 `import-not-found` que salen al correr `mypy dijkstra.py` desde `clases/dijkstra/` son esperados: es el problema ya conocido de que los archivos viven en subdirectorios (`clases/graph/...`) en vez de la raíz del repo — se resuelve solo al mover todo a la raíz en FASE 3 (ver Checklist subject). No es un bug de tipado real; correr `mypy .` desde la raíz del proyecto no debería mostrarlo.
 - [x] **Tests del Bloque 3** — escrito, **ejecutado y APROBADO** (2026-07-09). Todo verde, `flake8` + `mypy` limpios. Bloque 3 cerrado.
-- [ ] Menores: método `get_connection_to(other)` en `Zone`/`Graph` (lo necesita Simulation para hallar la conn entre 2 zonas consecutivas del path); posible dead code `drone_in`/`drone_out`/`is_full`/`drone_count` en Zone/Connection (revisar al diseñar Bloque 4 — si `reservations` cubre la ocupación, se borran con sus tests del Bloque 1).
+- [x] `Zone.get_connection(zone_asked: Zone) -> Optional[Connection]` — implementado 2026-07-10 (ver detalle en Bloque 4).
+- [ ] Menores: posible dead code `drone_in`/`drone_out`/`is_full`/`drone_count` en Zone/Connection (revisar al diseñar Bloque 4 — si `reservations` cubre la ocupación, se borran con sus tests del Bloque 1).
 
 > [!success] RESUELTO (2026-07-09) — bloqueo de import circular (Zone/Connection/Graph)
 > `zone.py`, `connection.py` y `graph.py` importaban la clase del otro solo bajo `if TYPE_CHECKING:` pero la usaban como anotación real en las firmas → `NameError` al definir la clase en runtime (`mypy`/`flake8` no lo detectan porque no ejecutan). Bloqueaba **todos** los tests, incluso Bloque 1.
@@ -440,22 +441,90 @@ Esqueleto del bucle listo y aprobado: guardia de línea vacía/comentario + cade
 
 ---
 
-### Bloque 4 — Simulation (EN PROGRESO — diseño de firmas/lógica, sin código real todavía)
+### Bloque 4 — Simulation (código escrito 2026-07-10 — SIN VERIFICACIÓN EMPÍRICA, no cerrado)
 
-Archivo: `clases/simulation/simulation.py`. Estado: firmas y atributos definidos, cuerpos de métodos aún en pseudocódigo. **Pausado 2026-07-09** (el estudiante paró por cansancio).
+Archivo: `clases/simulation/simulation.py`. Los 4 métodos (`calculating_reservations`, `populate_logs`, `output`, `simulating`) tienen código real, revisados en detalle (estáticamente, línea por línea) con el agente.
 
-> [!danger] AL RETOMAR — primera decisión pendiente (L2/L3)
-> **El offset de `logs[0]` (la posición inicial `start` NO se imprime).** El ejemplo del subject arranca el output en el primer *movimiento*, no en `start`. Como el bucle de logs indexa por el índice `i` del path y el start es el índice 0, hay que decidir **una** de dos formas de evitar una primera línea en blanco:
-> - **(a)** `logs` con offset → usar `logs[i-1]`, o
-> - **(b)** indexar por `i` y en `output` saltar las sublistas vacías.
-> Esto es lo primero a resolver antes de seguir escribiendo `simulating`/`output`.
+> [!danger] "Código escrito" ≠ "Bloque cerrado"
+> Ni el código de `Simulation` ni el de `Zone.get_connection` se corrieron **ni una sola vez** contra un mapa real. La revisión fue solo lectura + razonamiento — puede haber bugs que la revisión estática no detectó (mypy tampoco se corrió sobre el archivo completo esta sesión). No dar por cerrado el bloque hasta tener al menos una corrida real verificada.
+
+Falta: instalar/correr `pytest`, ejecutar contra un mapa real (arreglando antes el mismatch de ruta en `tests/test_pytest.py`, ver sección de tests más abajo), correr contra el caso de test de integración anotado en Fase 2 (mapa restricted, 3 drones → 1/2/3), escribir tests reales con `pytest`, y limpiar mypy/flake8 (`path[i-1].get_connection` — mypy puede marcarlo por no narrowear `path[i-1]`; decisión del estudiante: resolverlo si/cuando mypy se queje, no antes).
+
+> [!info] `Simulation.populate_logs` creó un método nuevo (no estaba en el diseño original de Fase 1): separación deliberada del bloque de logs que antes vivía dentro de `simulating`. `populate_logs(self, drone: Drone, path: List[Union[Zone, Connection]]) -> None`.
+
+> [!success] Invariante probado (2026-07-10) — por qué `populate_logs` puede indexar `self.logs` solo con `len(self.logs)` sin gaps
+> Duda del estudiante: ¿puede un turno completo quedar sin ningún dron moviéndose (todos esperando a la vez), rompiendo la indexación posicional de `populate_logs`? Se probó que **no**, dado el diseño específico de la espera en Dijkstra:
+> - Si un dron `K` espera en el turno `T`, es porque un dron `J` (calculado antes) ocupa lo que `K` necesita en `T`.
+> - Si `J` también espera en `T`, por la misma razón hay que rastrear a otro dron anterior a `J` — la cadena siempre termina en **D1**.
+> - D1 se calcula con `reservations=None` (todo cuenta 0), así que **nunca** genera un edge de espera — si está activo, siempre se mueve.
+> - Un dron ya entregado no deja reserva activa en turnos posteriores a su entrega, así que no puede ser la causa de un bloqueo después de haber llegado a `end`.
+> - Conclusión: mientras haya al menos un dron activo en un turno, siempre hay alguien moviéndose (generando log) — nunca puede haber un turno "vacío". `len(self.logs)` nunca se atrasa respecto al turno real.
+
+**Bugs encontrados y corregidos durante la revisión de código (2026-07-10):**
+- `self.reservartions` (typo) usado en vez de `self.reservations` — `AttributeError` en runtime.
+- Rama de creación de turno escribía una **lista** (`self.reservations[i] = [name]`) o directamente un **string** (`self.reservations[i] = name`) en vez de un **dict** — `self.reservations` es `Dict[int, Dict[str, int]]`.
+- `path[i - 1].get_connection(path[i]).name` llamaba `.name` directo sobre un `Optional[Connection]` sin guardar antes — crash si `get_connection` daba `None`, antes de poder manejarlo. Corregido: se guarda el resultado, se chequea `is not None`, y si es `None` se hace `raise RuntimeError(...)` (decisión del estudiante: un `None` ahí es estado corrupto — Dijkstra ya garantiza que la conexión existe entre zonas consecutivas del path — no un caso de negocio válido).
+- **Bug de sobreescritura de turno:** `n_reserves == 0` no distingue "el turno `i` no existe en `reservations`" de "el turno existe pero con otro nombre reservado". La rama de creación hacía `self.reservations[i] = {name: 1}` incondicionalmente, pisando cualquier reserva de otro dron ya guardada en ese mismo turno. Corregido separando 3 casos: `n_reserves == 0 and i not in self.reservations` (crear dict nuevo), `n_reserves == 0 and i in self.reservations` (agregar clave al dict existente), `else` (incrementar). Aplicado en el bloque de zona/path y en el de conexión.
+- `simulating`: `self.drones[0].add_path()` sin argumento (faltaba el `path`); `populate_logs` no recibía el dron (necesario para el `id` del entry); orden entre `calculating_reservations` y `add_reservation` en la rama D2+ estaba invertido (el snapshot del dron terminaba incluyendo su propio path recién calculado, en vez de solo lo que vio al momento del cálculo). Los tres corregidos.
+- `output`: `print("\n")` duplicaba el salto de línea (el propio `print` ya agrega uno) — dejaba una línea en blanco extra por turno. Corregido a `print()`.
+
+### Tests Bloque 4 — pytest (EN PROGRESO — aprendizaje de la herramienta, aún sin test real completo)
+
+> [!warning] Cambio de estrategia de tests (2026-07-10)
+> El estudiante **borró intencionalmente** (sin commitear) `tests/test_bloque_1.py`, `tests/test_bloque_2.py`, `tests/test_bloque_3.py`, toda `tests/files_test/` (27 casos del Parser) y `ultimo_punto.txt`. Decisión propia: arrancar de cero con `pytest` en vez de mantener el estilo manual/print de Bloques 1-3. Esos archivos siguen recuperables desde el último commit (`git checkout`) si hiciera falta, pero la intención es no volver a ellos — Bloque 4 en adelante se testea con `pytest`, confirmado como válido por el subject (§III.3).
+
+**Estado del aprendizaje de pytest (sesión 2026-07-10) — el agente enseñó, el estudiante todavía se está apropiando de la herramienta:**
+- [x] Instalación (`pip install pytest`), convención de nombres (`test_*.py`, funciones `test_*`).
+- [x] Cómo funciona `assert` (comparación implícita, pytest introspecciona la expresión y muestra obtenido/esperado solo si falla — a diferencia del `print` manual de antes).
+- [x] `pytest.raises` para testear excepciones (mencionado, no aplicado todavía a código real).
+- [x] `@pytest.fixture`: una función decorada con `@pytest.fixture` se ejecuta automáticamente cuando un test tiene un **parámetro con el mismo nombre** que la fixture; pytest le inyecta el `return` de la fixture como argumento. El setup vive ahí, no a nivel de módulo.
+- [x] Por qué el setup **no puede estar a nivel de módulo**: si vive fuera de una función `test_*` o de una fixture, se ejecuta apenas pytest **importa** el archivo para descubrir tests (no como parte de "correr" un test) — rompe el flujo y puede duplicar la ejecución.
+- [x] pytest captura `stdout` por default (los `print` no se ven si el test pasa) — flag **`-s`** (o `--capture=no`) para verlos siempre. Uso: `pytest -s tests/test_pytest.py`.
+- [x] Construcción de rutas robusta a archivos de mapa desde un test: `TEST_DIR = os.path.dirname(os.path.abspath(__file__))` + `os.path.join(TEST_DIR, ...)` — para que la ruta no dependa de desde dónde se invoque `pytest`. Explicado línea por línea (`__file__`, `abspath`, `dirname`, `join`).
+
+**Archivo actual:** `tests/test_pytest.py` — nombre de archivo temporal/exploratorio (no es el nombre final de Bloque 4, eso queda para cuando se formalice). Estado real (2026-07-10, después de varias rondas de corrección guiada — el agente señaló, el estudiante corrigió):
+```python
+TEST_DIR = os.path.dirname(os.path.abspath(__file__))
+
+@pytest.fixture
+def simulation() -> Simulation:
+    route = os.path.join(TEST_DIR, "maps/easy", "01_linear_path.txt")
+    graph, drones = Parser(route).manufacturing()
+    sim = Simulation(graph, drones)
+    sim.simulating()
+    return sim
+
+def test_all_drones_reach_end(simulation: Simulation) -> None:
+    assert len(simulation.logs) > 0
+```
+Errores que tenía y que el agente señaló (sin escribir el código, salvo la excepción puntual de abajo) hasta que el estudiante los corrigió:
+- Setup entero a nivel de módulo (fuera de toda función) → se ejecutaba al importar, y el estudiante llamaba el test a mano (`test_1(simulation)`) para compensar.
+- Typo `simutation` (parámetro) vs `simulation` (variable global) — el parámetro de la función no se usaba, el cuerpo leía la global por accidente.
+- Con esos dos bugs juntos, pytest iba a fallar solo al intentar correr `test_1` (pide una fixture `simutation` que no existe) — aparte de que el test ya se había "corrido" a mano antes.
+- Sin ningún `assert` — el "test" no verificaba nada, solo ejecutaba código.
+
+> [!info] Excepción puntual (2026-07-10)
+> El estudiante pidió explícitamente que el agente reescribiera el archivo completo ("hazlo, quiero ver cómo quedaría bien") después de varias rondas de que el agente solo señalara los problemas sin corregirlos. El agente lo hizo aclarando que es una excepción puntual pedida por el estudiante, no un cambio a la regla general (`HANDOFF.md`: el estudiante escribe el código, el agente señala).
+
+**Pendiente / al retomar:**
+- [ ] **El `assert` actual es un placeholder** (`len(simulation.logs) > 0`) — no verifica nada específico del mapa `01_linear_path.txt`. Falta que el estudiante defina qué debería pasar exactamente con ese mapa (cuántos turnos, en qué orden llegan D1/D2, contenido esperado de `logs`) para escribir un `assert` real.
+- [ ] **Posible bug de ruta sin confirmar:** la fixture arma `route` con `os.path.join(TEST_DIR, "maps/easy", "01_linear_path.txt")`, con `TEST_DIR` = carpeta de `tests/`. Pero el archivo real está en `maps/easy/01_linear_path.txt` **en la raíz del repo**, no en `tests/maps/easy/`. Esto probablemente da `FileNotFoundError` al correrlo — no se llegó a ejecutar `pytest` en la sesión (no había `pytest` instalado en el intérprete usado para probar). **Primer chequeo al retomar.**
+- [ ] Falta cubrir el caso de test de integración ya diseñado (mapa `start → conn(cap1) → R(restricted,cap1) → end`, 3 drones → deben transitar en turnos 1/2/3) — probablemente conviene un mapa propio en vez de los provistos en `maps/`.
+- [ ] Formalizar el archivo final de tests de Bloque 4 (nombre, organización) una vez que el estudiante esté más cómodo con pytest — `test_pytest.py` es exploratorio.
+- [ ] `pytest.raises` mencionado pero no aplicado todavía — buen candidato para testear el `raise RuntimeError` de `calculating_reservations` cuando `get_connection` da `None`.
+
+> [!success] RESUELTO (2026-07-10) — offset de `logs[0]`
+> Opción **(a)** con shift: el `for` recorre `range(0, len(path) - 1)` y en cada `i` arma el entry con `path[i + 1]` (nunca se toca `path[0]` = `start` directamente como entry). Pseudocódigo final del bloque de logs dentro de `simulating`:
+> - `if path[i] == path[i + 1]: continue` — skip por espera (ver más abajo, reemplaza a la versión vieja "arrancar en i=1").
+> - `entry = drone.id + "-" + drone.path[i + 1].name`
+> - `if (i + 1) > len(self.logs):` crear lista nueva `[entry]` y `self.logs.append(...)` (rama de creación); `else:` `self.logs[i].append(entry)` (rama de turno ya existente, para que convivan varios drones en la misma línea).
 
 #### Firmas (cerradas 2026-07-09)
 
 - `__init__(self, graph: Graph, drones: List[Drone]) -> None` — **se eliminó el parámetro `dijkstra`** (se instancia uno nuevo por dron dentro del método, no se reutiliza).
 - `simulating(self) -> None` — orquestador (era `calculate`).
 - `calculating_reservations(self, path: List[Union[Zone, Connection]]) -> ...` — vuelca la ocupación de un path a `self.reservations`. Return por definir (probablemente `-> None`, muta en sitio).
-- `get_connection(self, zone1, zone2) -> Connection` — helper. **Decisión tomada:** se moverá a `Zone` como `get_connection_to(other)` y recibirá objetos `Zone` (no `str`), porque quien lo llama ya tiene los objetos del path. Pendiente crear el método en `Zone`.
+- `get_connection(self, zone1, zone2) -> Connection` — helper original en `Simulation`. **Movido a `Zone.get_connection(zone_asked: Zone) -> Optional[Connection]`** (implementado 2026-07-10; nombre final `get_connection`, no `get_connection_to` como se había anotado antes). Retorna `Optional` porque recorre `self.connections` y puede no encontrar match; el caller (`Simulation`) debe hacer `raise` explícito si da `None` en un contexto donde Dijkstra ya garantizó que la conexión existe (zonas consecutivas de un path válido) — un `None` ahí sería estado corrupto, no un caso de negocio válido.
 - `output(self) -> None` — imprime `logs` (era `print_log`).
 
 #### Atributos (ver tabla en Fase 1, ya actualizada)
@@ -470,15 +539,15 @@ Archivo: `clases/simulation/simulation.py`. Estado: firmas y atributos definidos
 - **Indexado de `reservations` y `logs` por el índice `i` del path** = turno de Dijkstra (todos arrancan en `start` = coste 0 = índice 0; cada elemento = +1 turno; restricted = `Connection`+`Zone` = 2 elementos = +2). Confirmado alineado con lo que Dijkstra lee.
 - **`reservations`: se saltea `start`** al reservar (Dijkstra lo exime vía `not relevant`, no lo chequea).
 - **`get_connection` se llama solo en movimientos NORMALES** (en restricted la `Connection` ya viene intercalada en el path → se reserva sola al iterar). *(El estudiante ya corrigió la rama que estaba invertida.)*
-- **Omisión en el output:** un dron en **espera** (`path[i] == path[i-1]`) se omite de esa línea; un dron **entregado** deja de aparecer solo porque su path termina en `end`. El bucle debe arrancar en **`i = 1`** (en `i = 0`, `path[i-1]` sería `path[-1]` = `end`, bug de wrap-around).
+- **Omisión en el output (versión final, 2026-07-10):** con el `for i in range(0, len(path) - 1)` del bloque de logs, un dron en **espera** se detecta con `if path[i] == path[i + 1]: continue` (mismo par de índices que ya usa el bloque para armar el entry, sin wrap-around); un dron **entregado** deja de aparecer solo porque su path termina en `end`.
 - **NOTA descartada:** poner `max_drones = float("inf")` en start/end NO hace falta (Dijkstra ya exime zonas `relevant`) y rompería el tipo `int`.
 
 #### Pendiente de escribir/decidir
 
-- [ ] **PRIMERO:** resolver el offset de `logs[0]` (L2/L3, ver danger arriba).
-- [ ] Patrón para crecer `logs`: `if i >= len(self.logs): self.logs.append([entry]) else: self.logs[i].append(entry)` — sin `logs[i].append` en la rama de creación (IndexError), sin corchetes de más.
-- [ ] Recordar `.name` al construir el string del log: `drone.path[i].name` (los elementos son objetos, no strings).
-- [ ] Crear `Zone.get_connection_to(other: Zone) -> Connection`.
+- [x] Offset de `logs[0]` — resuelto (ver success arriba).
+- [x] Patrón para crecer `logs` — resuelto: `if (i + 1) > len(self.logs): ... else: self.logs[i].append(entry)`.
+- [x] `.name` al construir el string del log — resuelto: `drone.path[i + 1].name`.
+- [x] `Zone.get_connection(zone_asked: Zone) -> Optional[Connection]` — implementado 2026-07-10.
 - [ ] Escribir los cuerpos reales (hoy son pseudocódigo + `return ...` placeholders).
 - [ ] Partir líneas E501 (diferido a propósito hasta tener el código).
 - [ ] Tests con `pytest` (framework confirmado por el subject) — incluir el caso de integración anotado arriba (mapa restricted, 3 drones → 1/2/3).
@@ -501,7 +570,7 @@ Archivo: `clases/simulation/simulation.py`. Estado: firmas y atributos definidos
 - [ ] 100% orientado a objetos
 - [ ] 100% typesafe: flake8 + mypy sin errores
 - [ ] El programa no crashea con excepciones no manejadas
-- [ ] Makefile con todas las reglas requeridas
+- [ ] Makefile con todas las reglas requeridas — **arrancado 2026-07-10** (`Makefile` en la raíz existe), pero solo tiene `test` y `clean`. Faltan `install`, `run`, `debug`, `lint`, `lint-strict` (ver `HANDOFF.md` para el detalle de cada regla exigida por el subject).
 - [ ] README en inglés con todas las secciones obligatorias
 - [ ] Visual representation implementada (pygame)
 

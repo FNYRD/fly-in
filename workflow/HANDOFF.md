@@ -232,22 +232,28 @@ Secciones obligatorias:
 
 ## Briefing para el siguiente agente
 
-**Fecha:** 2026-07-06 (actualizado)
-**Contexto al momento del handoff:** ver PROJECT.md para el detalle fino del Bloque 3
+**Fecha:** 2026-07-10 (actualizado)
+**Contexto al momento del handoff:** ver `PROJECT.md` para el detalle fino de Bloque 4 (Simulation) y de la sección de tests con pytest.
 
 ### Qué se hizo
 
 - FASE 0 y FASE 1 completas. Todos los bloques diseñados y documentados en `PROJECT.md`.
 - FASE 2 en progreso:
-  - **Bloque 1 (Modelo del grafo):** `Zone`, `Connection`, `Graph` — implementados y testeados en `tests/test_bloque_1.py`
-  - **Bloque 4 parcial — `Drone`:** implementado y testeado en `tests/test_bloque_1.py`
-  - **Bloque 2 — Parser:** ✅ completo y testeado (`tests/test_bloque_2.py` + `tests/files_test/`). mypy/flake8 limpios.
-  - **Bloque 3 — Dijkstra:** turn-aware (enfoque A) casi completo. Puntos 1/2/4 hechos; **falta el punto 3 (arista de espera)**, partir 5 líneas E501, y tests. Ver detalle y decisiones abiertas en `PROJECT.md` (sección Bloque 3).
+  - **Bloque 1 (Modelo del grafo):** `Zone`, `Connection`, `Graph` — implementados. *(Tests originales borrados intencionalmente, ver abajo.)*
+  - **Bloque 4 parcial — `Drone`:** implementado.
+  - **Bloque 2 — Parser:** ✅ completo. mypy/flake8 estaban limpios antes de que se borraran los tests.
+  - **Bloque 3 — Dijkstra:** ✅ **CERRADO** (turn-aware, enfoque A completo).
+  - **Bloque 4 — Simulation:** código escrito en los 4 métodos (`calculating_reservations`, `populate_logs`, `output`, `simulating`), revisado línea por línea con el agente. Varios bugs encontrados y corregidos durante esa revisión — detalle completo en `PROJECT.md` (typo `reservartions`, sobreescritura de dict de reservas en vez de mergear, `.name` sobre `Optional[Connection]` sin guard, orden `add_reservation`/`calculating_reservations` invertido, `add_path()` sin argumento, `print("\n")` duplicando salto de línea).
+    > [!danger] NO CONFUNDIR "código escrito" con "Bloque 4 cerrado"
+    > **El código de `Simulation` nunca se ejecutó ni una sola vez de punta a punta.** La revisión fue 100% estática (lectura + razonamiento), no hay corrida real contra ningún mapa que confirme que compila, que no crashea, o que el output es correcto. `pytest` ni siquiera llegó a correrse en la sesión (no estaba instalado en el intérprete usado para probar). Bloque 4 se considera **cerrado recién cuando haya al menos una corrida real verificada** (idealmente el caso de test de integración ya diseñado: mapa restricted, 3 drones → turnos 1/2/3) — hasta entonces, tratar cualquier parte de `Simulation` como **no verificada**, con posibles bugs adicionales no detectados en la revisión estática.
+
+> [!warning] Cambio de estrategia de tests (2026-07-10)
+> El estudiante **borró intencionalmente** `tests/test_bloque_1.py`, `test_bloque_2.py`, `test_bloque_3.py`, `tests/files_test/` (27 casos) y `ultimo_punto.txt` (sin commitear — recuperables con `git checkout` si hiciera falta, pero la intención es no volver a ese estilo). A partir de Bloque 4, los tests se escriben con **`pytest`** (confirmado válido por el subject, §III.3), no más el estilo manual/print de Bloques 1-3.
 
 ### Estructura de archivos actual
 
 ```
-Fly-In/
+fly_in/
   clases/
     graph/
       zone.py
@@ -257,52 +263,56 @@ Fly-In/
       drone.py
     parser/
       parser.py
+    dijkstra/
+      dijkstra.py
+    simulation/
+      simulation.py
   tests/
-    test_bloque_1.py
+    test_pytest.py       ← exploratorio, aprendiendo pytest (ver abajo)
+    lazy_tests.py         ← scratch, no relacionado al proyecto
+  maps/                   ← mapas de ejemplo provistos/organizados por dificultad
+    easy/ medium/ hard/ challenger/ README.md
+  Makefile                ← nuevo (2026-07-10), incompleto: solo `test` y `clean`
+  fly-in.pdf
   workflow/
     SYSTEM.md
     HANDOFF.md
     PROJECT.md
 ```
 
-> [!warning] Los archivos están en subdirectorios por ahora. Al llegar a FASE 3 se mueven todos a la raíz del repositorio Git.
+> [!warning] Los archivos siguen en subdirectorios. Al llegar a FASE 3 se mueven todos a la raíz del repositorio Git (requisito duro del subject).
 
 ### Decisiones de diseño importantes
 
 - `Drone` solo recibe `id` como argumento. `path` y `reservations` se asignan después vía `add_path()` y `add_reservation()` — el Parser crea los drones vacíos y la Simulation los completa.
-- `Drone.path` es `List[Union[Zone, Connection]]` (objetos, no nombres — actualizado 2026-07-02). `Dijkstra.dijkstra()` retorna lo mismo. En tramos `restricted` se intercala la `Connection` del tránsito. Turno de espera = repetir la misma `Zone` (sin sentinel `"waiting"`). Al imprimir el output se usa `.name` (zona o conexión).
-- `Zone` tiene atributo `relevant: Union[str, None]` — valores `"start_hub"`, `"end_hub"` o `None` (actualizado 2026-06-29: el Parser guarda el token sin los dos puntos vía `[:-1]`, sin remapear a `"start"`/`"end"`). El consumidor (pathfinding/simulación) debe comparar contra `"start_hub"` / `"end_hub"`.
-- `reservations` es `Dict[int, Dict[str, int]]` (plano, actualizado 2026-07-06): `reservations[turno][nombre] = drone_count`. Nombres de zona no llevan `-` y los de conexión sí, así que no colisionan → no hace falta separar zonas/conexiones en capas.
+- `Drone.path` es `List[Union[Zone, Connection]]` (objetos, no nombres). `Dijkstra.dijkstra()` retorna lo mismo. En tramos `restricted` se intercala la `Connection` del tránsito. Turno de espera = repetir la misma `Zone` (sin sentinel `"waiting"`). Al imprimir el output se usa `.name`.
+- `Zone` tiene atributo `relevant: Union[str, None]` — valores `"start_hub"`, `"end_hub"` o `None`.
+- `Zone.get_connection(zone_asked: Zone) -> Optional[Connection]` (nombre final, no `get_connection_to` como se había anotado antes) — retorna `None` si no encuentra la conexión; el caller hace `raise RuntimeError` si eso pasa en un contexto donde Dijkstra ya garantizó que la conexión existe (path válido) — un `None` ahí es estado corrupto, no un caso de negocio.
+- `reservations` es `Dict[int, Dict[str, int]]` (plano): `reservations[turno][nombre] = drone_count`. Nombres de zona no llevan `-` y los de conexión sí, así que no colisionan.
 - El Parser retorna `tuple[Graph, List[Drone]]` — crea los drones vacíos (sin path) listos para que la Simulation calcule sus rutas.
+- **Invariante probado sobre `Simulation`** (ver `PROJECT.md` para la demostración completa): mientras haya al menos un dron activo en un turno, **siempre** hay alguien moviéndose ese turno (nunca puede estar todo el fleet esperando simultáneamente) — esto es lo que garantiza que `populate_logs` pueda indexar `self.logs` posicionalmente con `len(self.logs)` sin gaps. Se prueba por inducción: toda espera se rastrea a un dron anterior, y la cadena siempre termina en D1, que nunca espera (se calcula con `reservations=None`).
 
 ### Siguiente paso
 
-**Bloque 3 — Dijkstra CERRADO (2026-07-09).** **Bloque 4 — Simulation EN PROGRESO** (mismo día): firmas y atributos definidos, cuerpos aún en pseudocódigo. El estudiante pausó por cansancio.
+**Bloque 4 — Simulation: código escrito y revisado, sin correr todavía.** El estudiante está aprendiendo pytest en paralelo (ver sección dedicada en `PROJECT.md`, dentro de Bloque 4).
 
-> [!danger] AL RETOMAR — primera decisión pendiente
-> El **offset de `logs[0]`** en `Simulation` (la posición inicial `start` no se imprime en el output → evitar una primera línea vacía). Dos opciones: (a) `logs[i-1]` con offset, o (b) indexar por `i` y saltar sublistas vacías en `output`. Ver detalle completo en `PROJECT.md` → Fase 2 → Bloque 4 (bloque `[!danger]` y sección "Pendiente de escribir/decidir"). **Es lo primero a resolver antes de seguir escribiendo `simulating`/`output`.**
-
-El detalle fino de Bloque 4 (firmas cerradas, decisiones de lógica tomadas, y todo lo pendiente) está en `PROJECT.md`. Abajo queda el contexto general del proyecto.
-
-> [!success] RESUELTO (2026-07-09) — lo que estaba bloqueado la sesión anterior
-> - **Import circular (`NameError` por `TYPE_CHECKING`):** arreglado con `from __future__ import annotations` en `zone.py`, `connection.py` **y `graph.py`** (este último había quedado sin el fix). `TYPE_CHECKING` se mantiene (lo necesita mypy).
-> - **Bug de `rebuild()` en `start`:** corregido con corte estructural `if before is None: break` (camina hasta la semilla `(start,0)`, único estado sin `previous`). Las esperas se reconstruyen completas.
-> - **Typo `Unreacheble`→`Unreachable`** y confirmado que ese `raise` es código muerto de la práctica (se deja como red de seguridad).
-> - **Expectativas del test** ajustadas: una espera suma un turno al path (antes se "absorbía" por el bug de rebuild).
+> [!danger] AL RETOMAR — primer chequeo pendiente
+> `tests/test_pytest.py` tiene una fixture que arma `route` con `os.path.join(TEST_DIR, "maps/easy", "01_linear_path.txt")`, donde `TEST_DIR` es la carpeta `tests/`. Pero el mapa real vive en `maps/easy/01_linear_path.txt` **en la raíz del repo**, no en `tests/maps/`. Esto probablemente tira `FileNotFoundError` — no se llegó a correr `pytest` en la sesión anterior (no estaba instalado en el intérprete usado). **Primera cosa a verificar.**
 
 En orden, lo que sigue:
 
-1. **Bloque 4 — Simulation:** es quien **produce** `reservations` (`Dict[int, Dict[str, int]]` plano). Diseño ya confirmado: crea una instancia **nueva** de `Dijkstra` por cada dron (nunca reutiliza el objeto), le pasa el `reservations` actualizado de ese momento, y hace `drone.add_path(resultado)`. `Drone` es solo contenedor de datos; `Simulation` orquesta.
-   - **Invariante crítico (ver `PROJECT.md`):** al llenar `reservations`, un dron reserva una zona solo los turnos que su path lo pone ahí; el turno que se mueve, ya cuenta en la destino, no en la anterior (regla subject §VII.3 "moving out frees capacity that same turn"). Sale solo recorriendo el path posición por posición.
-   - **Caso de test de integración anotado (arriba en `PROJECT.md`, Fase 2):** mapa `start → conn(cap 1) → R(restricted, cap 1) → end`, 3 drones → deben transitar en turnos 1/2/3 (escalonados por la capacidad del link). Verifica que Simulation alimenta reservations bien.
-2. **Tests de Bloque 4 — framework:** confirmado en el subject (§III.3): `pytest` o `unittest`. Se usa `pytest` (no más estilo print de Bloques 1-3).
-3. Menores: `get_connection_to` en `Zone`/`Graph` (lo necesita Simulation para hallar la conn entre 2 zonas consecutivas del path); revisar dead code `drone_in/out/is_full/drone_count` en Zone/Connection (si `reservations` cubre la ocupación, se borran con sus tests del Bloque 1).
+1. Confirmar/arreglar la ruta del mapa en `tests/test_pytest.py` y correr `pytest -s tests/test_pytest.py` para ver si `Simulation` funciona de punta a punta con un mapa real.
+2. El `assert` actual (`len(simulation.logs) > 0`) es un placeholder — falta que el estudiante defina qué debería pasar exactamente con el mapa de test (turnos, orden de llegada) para escribir un `assert` real.
+3. Cubrir el caso de test de integración ya diseñado hace tiempo: mapa `start → conn(cap1) → R(restricted,cap1) → end`, 3 drones → deben transitar la conexión en turnos 1/2/3.
+4. Formalizar el archivo final de tests de Bloque 4 (nombre, organización) una vez el estudiante esté cómodo con pytest — `test_pytest.py` es exploratorio.
+5. Completar el `Makefile` (faltan `install`, `run`, `debug`, `lint`, `lint-strict` — ver Chapter III.2 del subject) — no es urgente, pero está anotado en el checklist de FASE 3 de `PROJECT.md`.
+6. Menor: revisar dead code `drone_in/out/is_full/drone_count` en Zone/Connection (si `reservations` cubre toda la ocupación).
 
 > [!important] Instrucción para el próximo agente — primer mensaje de la sesión
 > Al retomar, el primer mensaje al estudiante debe:
-> 1. Confirmar que **Bloque 3 quedó cerrado** (Dijkstra + tests verdes + lint limpio).
-> 2. Proponer arrancar con **Bloque 4 — Simulation**, recordando el invariante de reservations y el caso de test de integración (mapa restricted, 3 drones → 1/2/3).
-> 3. Recordar que los tests de Bloque 4 van con `pytest`.
-> Recordar: el estudiante escribe el código; el agente no lo escribe por su cuenta sin acordarlo antes línea a línea. Los tests sí los genera el agente (regla de `SYSTEM.md`), pero después de acordar conceptualmente los casos con el estudiante. **Regla repetida por el estudiante: NO proponer soluciones ni escribir código — él propone diseño/código primero, el agente solo analiza y señala.**
+> 1. Confirmar que **Bloque 4 (Simulation) tiene código real en los 4 métodos**, revisado y con varios bugs ya corregidos — no queda en pseudocódigo.
+> 2. Señalar el problema de ruta en `tests/test_pytest.py` (arriba) como primer paso concreto a verificar.
+> 3. Recordar que el estudiante está aprendiendo pytest recién ahora — no asumir que ya domina fixtures/asserts, pero tampoco repetir la explicación básica si no hace falta.
+> Recordar: el estudiante escribe el código; el agente no lo escribe por su cuenta sin acordarlo antes línea a línea. Los tests sí los genera el agente (regla de `SYSTEM.md`), pero después de acordar conceptualmente los casos con el estudiante.
 
-> [!important] Regla de trabajo (repetida por el estudiante): NO proponer soluciones ni escribir código — el estudiante propone diseño/código primero, el agente solo analiza y señala. Ver `SYSTEM.md`.
+> [!important] Regla de trabajo (repetida varias veces por el estudiante): NO proponer soluciones ni escribir código — el estudiante propone diseño/código primero, el agente solo analiza y señala. Excepción puntual ya ocurrida (2026-07-10): si el estudiante pide explícitamente "hazlo vos" después de rondas de señalamiento, el agente puede escribirlo aclarando que es una excepción puntual, no un cambio de regla general. Ver `SYSTEM.md`.

@@ -1,2 +1,0 @@
-start_hub: a 0 0
-nb_drones: 2

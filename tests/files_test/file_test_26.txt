@@ -1,8 +1,0 @@
-nb_drones: 2
-start_hub: start 0 0
-end_hub: goal 10 10
-hub: roof 3 4 [zone=restricted]
-hub: dead 1 1 [zone=blocked]
-connection: start-roof
-connection: roof-goal
-connection: start-dead
