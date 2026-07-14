@@ -1,6 +1,6 @@
-from clases.graph.zone import Zone
-from clases.graph.graph import Graph
-from clases.graph.connection import Connection
+from zone import Zone
+from graph import Graph
+from connection import Connection
 from typing import Dict, Union, List, Set, Tuple
 import heapq
 

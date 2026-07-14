@@ -1,8 +1,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from clases.graph.connection import Connection
-    from clases.graph.zone import Zone
+    from connection import Connection
+    from zone import Zone
 from typing import Dict, List
 
 

@@ -1,7 +1,7 @@
-from clases.graph.connection import Connection
-from clases.graph.zone import Zone
-from clases.graph.graph import Graph
-from clases.drone.drone import Drone
+from connection import Connection
+from zone import Zone
+from graph import Graph
+from drone import Drone
 from typing import List, Union, Tuple
 
 
@@ -20,7 +20,8 @@ class Parser:
         if len(line_processed) != 2:
             raise ValueError(
                 "Wrong Drone's number declaration")
-        if not line_processed[1].isdigit() or (n_drones := int(line_processed[1])) < 1:
+        if (not line_processed[1].isdigit()
+                or (n_drones := int(line_processed[1])) < 1):
             raise ValueError(
                 "Drone's number must be a digit greater than 1")
         for i in range(n_drones):
@@ -76,7 +77,8 @@ class Parser:
                 raise ValueError("The Zone's coordinates must be digits")
         zone: Zone = Zone(line_processed[1], int(
             line_processed[2]), int(line_processed[3]))
-        if line_processed[0] == "start_hub:" or line_processed[0] == "end_hub:":
+        if (line_processed[0] == "start_hub:"
+                or line_processed[0] == "end_hub:"):
             if line_processed[0] in self.start_end:
                 raise ValueError(f"Zone {line_processed[0]} already exists")
             self.start_end.append(line_processed[0])
@@ -110,7 +112,8 @@ class Parser:
                 raise ValueError(f"Wrong metadata fromat: {line_processed[2]}")
             arguments[0] = arguments[0][1:]
             arguments[1] = arguments[1][:-1]
-            if arguments[0] != "max_link_capacity" or not arguments[1].isdigit():
+            if (arguments[0] != "max_link_capacity"
+                    or not arguments[1].isdigit()):
                 raise ValueError(f"Wrong metadata values: {line_processed[2]}")
             max_link_capacity: int = int(arguments[1])
             if max_link_capacity < 1:
@@ -130,11 +133,13 @@ class Parser:
                     continue
                 if len(self.drones) == 0 and line_processed[0] != "nb_drones:":
                     raise ValueError(
-                        "Drone's number declaration must be at the beginning of the file")
+                        "Drone's number declaration must be "
+                        "at the beginning of the file")
                 elif line_processed[0] == "nb_drones:":
                     self._parse_drones(line_processed)
                 elif "hub" in line_processed[0]:
-                    if line_processed[0] not in ("hub:", "start_hub:", "end_hub:"):
+                    if (line_processed[0]
+                            not in ("hub:", "start_hub:", "end_hub:")):
                         raise ValueError(f"Unknown name: {line_processed[0]}")
                     self._parse_zones(line_processed)
                 elif line_processed[0] == "connection:":

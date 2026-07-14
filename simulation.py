@@ -1,8 +1,8 @@
-from clases.graph.connection import Connection
-from clases.graph.zone import Zone
-from clases.drone.drone import Drone
-from clases.graph.graph import Graph
-from clases.dijkstra.dijkstra import Dijkstra
+from connection import Connection
+from zone import Zone
+from drone import Drone
+from graph import Graph
+from dijkstra import Dijkstra
 from typing import Dict, List, Union, Optional
 
 
@@ -10,8 +10,7 @@ class Simulation:
     def __init__(self, graph: Graph, drones: List[Drone]) -> None:
         self.graph: Graph = graph
         self.drones: List[Drone] = drones
-        self.reservations: Union[Dict[int,
-                                      Dict[str, int]], None] = {}
+        self.reservations: Union[Dict[int, Dict[str, int]], None] = {}
         self.start: Union[Zone, None] = next(
             (start for start in self.graph.zones.values()
              if start.relevant == "start_hub"), None)
@@ -24,32 +23,45 @@ class Simulation:
                                  path: List[Union[Zone, Connection]]) -> None:
         n_reserves: int = 0
         connection_name: Optional[Connection]
+        current: Union[Zone, Connection]
+        prev: Union[Zone, Connection]
         for i in range(1, len(path)):
             if self.reservations is not None:
-                n_reserves = self.reservations.get((i), {}).get(path[i].name, 0)
+                n_reserves = self.reservations.get(
+                    (i), {}).get(path[i].name, 0)
                 if n_reserves == 0 and i not in self.reservations:
                     self.reservations[i] = {path[i].name: 1}
                 elif n_reserves == 0 and i in self.reservations:
                     self.reservations[i][path[i].name] = 1
                 else:
                     self.reservations[i][path[i].name] += 1
-                if isinstance(path[i], Zone) and path[i].zone_type != "restricted":
-                    connection_name = path[i - 1].get_connection(path[i])
-                    if connection_name is not None:
-                        n_reserves = (
-                            self.reservations.get((i),
-                                                {}).get(connection_name.name, 0))
-                        if n_reserves == 0 and i not in self.reservations:
-                            self.reservations[i] = {connection_name.name: 1}
-                        elif n_reserves == 0 and i in self.reservations:
-                            self.reservations[i][connection_name.name] = 1
-                        else:
-                            self.reservations[i][connection_name.name] += 1
-                    else:
-                        raise RuntimeError(
-                            "The order calculated by dijkstra() "
-                            "is wrong. Two consecutives zones without "
-                            "connection")
+                current = path[i]
+                prev = path[i - 1]
+                if current != prev:
+                    if (isinstance(current, Zone)
+                            and current.zone_type != "restricted"):
+                        if isinstance(prev, Zone):
+                            connection_name = prev.get_connection(current)
+                            if connection_name is not None:
+                                n_reserves = (
+                                    self.reservations.get(
+                                        (i), {}).get(connection_name.name, 0))
+                                if (n_reserves == 0
+                                        and i not in self.reservations):
+                                    self.reservations[i] = {
+                                        connection_name.name: 1}
+                                elif (n_reserves == 0
+                                      and i in self.reservations):
+                                    (self.reservations[i]
+                                     [connection_name.name]) = 1
+                                else:
+                                    (self.reservations[i]
+                                     [connection_name.name]) += 1
+                            else:
+                                raise RuntimeError(
+                                    "The order calculated by dijkstra() "
+                                    "is wrong. Two consecutives zones without "
+                                    "connection")
 
     def populate_logs(self, drone: Drone,
                       path: List[Union[Zone, Connection]]) -> None:
