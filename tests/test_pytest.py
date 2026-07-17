@@ -14,25 +14,33 @@ TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 
 @pytest.fixture
 def simulation() -> Simulation:
-    route = os.path.join(TEST_DIR, "..", "maps", "medium",
-                         "01_dead_end_trap.txt")
-    graph, drones = Parser(route).manufacturing()
-    sim = Simulation(graph, drones)
-    sim.simulating()
-    return sim
+    folder: str = "extra"
+    map_: str = "for_blocked_tests.txt"
+    try:
+        route = os.path.join(TEST_DIR, "..", "maps", folder,
+                            map_)
+        graph, drones = Parser(route).manufacturing()
+        sim = Simulation(graph, drones)
+        sim.simulating()
+        return sim
+    except (ValueError, FileNotFoundError, RuntimeError) as e:
+        print(f"Error: {e}")
+    except FileNotFoundError:
+        print("File route doesn't exits")
 
 
 def test_capacity_respected(simulation: Simulation) -> None:
+    """This test checks if at an especific turn the whole drone's
+    load in an especific zone or connection don't exceeds the its capacity"""
     sim = simulation
     zone_limits: Dict[str, int] = {
         z.name: z.max_drones for z in sim.graph.zones.values()
-        if not z.relevant
     }
     conn_limits: Dict[str, int] = {
         c.name: c.max_link_capacity for c in sim.graph.connections
     }
     max_turns = max(len(d.path) for d in sim.drones)
-    for turn in range(1, max_turns):
+    for turn in range(0, max_turns):
         zone_count: Dict[str, int] = {}
         conn_count: Dict[str, int] = {}
         for drone in sim.drones:
@@ -46,6 +54,11 @@ def test_capacity_respected(simulation: Simulation) -> None:
                 conn_count[pos.name] = (
                     conn_count.get(pos.name, 0) + 1)
         for name, count in zone_count.items():
+            if name in zone_limits and sim.graph.zones[name].relevant:
+                 assert count >= zone_limits[name], (f"T{turn}: start or goal zone"
+                 "cannot handle multiple drones at the same time!"
+                 )
+                 continue
             if name in zone_limits:
                 assert count <= zone_limits[name], (
                     f"T{turn}: zone '{name}' has {count} drones, "
@@ -56,8 +69,22 @@ def test_capacity_respected(simulation: Simulation) -> None:
                     f"T{turn}: connection '{name}' has {count} "
                     f"drones, max is {conn_limits[name]}")
 
+def test_no_blocked_zones(simulation: Simulation) -> None:
+    """This test checks that blocked zones aren't inaccessibles
+    cases when the only path to reach the end vertex it's a
+    blocked zone, the algorithm will raise and unreachable end
+    node using ValueError"""
+    sim = simulation
+    for drone in sim.drones:
+        for i, pos in enumerate(drone.path):
+            if isinstance(pos, Zone):
+                assert pos.zone_type != "blocked", (
+                    f"{drone.id} T{i}: is in blocked zone "
+                    f"'{pos.name}'")
 
 def test_all_drones_reach_end(simulation: Simulation) -> None:
+    """This test will traverse the drone's path and varify
+    if their last zone in its path it's the end zone """
     sim = simulation
     for drone in sim.drones:
         last = drone.path[-1]
@@ -87,7 +114,7 @@ def test_paths_are_valid(simulation: Simulation) -> None:
                 other = current.get_otherside_zone(prev)
                 assert other is not None and other.zone_type == "restricted", (
                     f"{drone.id} T{i}: '{prev.name}' is not part "
-                    f"of connection '{current.name} or wrong restricted zone {other.zone_type if isinstance(other, Zone) else "Error verifying zone"}'")
+                    f"of connection '{current.name} or wrong restricted zone {other.zone_type if isinstance(other, Zone) else 'Error verifying zone'}'")
             elif (isinstance(prev, Connection)
                   and isinstance(current, Zone)):
                 other = prev.get_otherside_zone(current)
@@ -100,14 +127,6 @@ def test_paths_are_valid(simulation: Simulation) -> None:
                     f"Connections in path")
 
 
-def test_no_blocked_zones(simulation: Simulation) -> None:
-    sim = simulation
-    for drone in sim.drones:
-        for i, pos in enumerate(drone.path):
-            if isinstance(pos, Zone):
-                assert pos.zone_type != "blocked", (
-                    f"{drone.id} T{i}: is in blocked zone "
-                    f"'{pos.name}'")
 
 
 # ============================================================

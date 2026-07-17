@@ -219,7 +219,7 @@ class Parser:
                     raise ValueError(f"Unknown line {line_processed}")
             if len(self.start_end) != 2:
                 raise ValueError(
-                    "It's mandatory being only one start and one end hub")
+                    "It's mandatory being one start and one end hub")
             if len(self.graph.connections) < 1:
                 raise ValueError(
                     "without connections it's imposible to "
