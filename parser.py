@@ -6,13 +6,30 @@ from typing import List, Union, Tuple
 
 
 class Parser:
+    """Reads a map file and builds the graph and drone list."""
+
     def __init__(self, route: str) -> None:
+        """Initialize the parser with the path to a map file.
+
+        Args:
+            route (str): Absolute path to the map file.
+        """
         self.route: str = route
         self.graph: Graph = Graph()
         self.drones: List[Drone] = []
         self.start_end: List[str] = []
 
     def _parse_drones(self, line_processed: List[str]) -> None:
+        """Parse the nb_drones line and create drone instances.
+
+        Args:
+            line_processed (List[str]): Tokenized line from the map file.
+
+        Raises:
+            ValueError: If drone count is already declared.
+            ValueError: If the line format is invalid.
+            ValueError: If the value is not a positive integer.
+        """
         n_drones: int = 0
         if len(self.drones):
             raise ValueError(
@@ -29,6 +46,19 @@ class Parser:
 
     def _parse_metadata(self, line_processed: List[str],
                         zone: Zone) -> None:
+        """Parse bracket-enclosed metadata and apply it to a zone.
+
+        Args:
+            line_processed (List[str]): Tokenized metadata tokens.
+            zone (Zone): The zone to apply metadata to.
+
+        Raises:
+            ValueError: If bracket format is invalid.
+            ValueError: If a key or value is empty.
+            ValueError: If zone type is not recognized.
+            ValueError: If max_drones is not a positive integer.
+            ValueError: If metadata key is unknown.
+        """
         length: int = len(line_processed)
         data: list[str] = []
         available_zones: List[str] = [
@@ -59,6 +89,19 @@ class Parser:
                         f"{data[0]} it's not a valid metadata type")
 
     def _parse_zones(self, line_processed: List[str]) -> None:
+        """Parse a hub/start_hub/end_hub line and add the zone to the graph.
+
+        Args:
+            line_processed (List[str]): Tokenized line from the map file.
+
+        Raises:
+            ValueError: If the line has too few arguments.
+            ValueError: If the zone name is duplicated.
+            ValueError: If the zone name contains dashes.
+            ValueError: If coordinates are not valid integers.
+            ValueError: If start_hub or end_hub is duplicated.
+            ValueError: If metadata is invalid.
+        """
         temp_val: str = "1"
         length: int = len(line_processed)
         if length < 4:
@@ -88,6 +131,21 @@ class Parser:
         self.graph.add_zone(zone)
 
     def _parse_connections(self, line_processed: List[str]) -> None:
+        """Parse a connection line and link two zones.
+
+        Args:
+            line_processed (List[str]): Tokenized line from the map file.
+
+        Raises:
+            ValueError: If the line format is invalid.
+            ValueError: If the connection name format is wrong.
+            ValueError: If one or both zone names do not exist.
+            ValueError: If the connection is duplicated.
+            ValueError: If metadata format is invalid.
+            ValueError: If bracket format is wrong.
+            ValueError: If metadata key or value is invalid.
+            ValueError: If max_link_capacity is not a positive integer.
+        """
         length: int = len(line_processed)
         if length < 2 or length > 3:
             raise ValueError("Connection format error")
@@ -125,11 +183,24 @@ class Parser:
         z2.add_connection(connection)
 
     def manufacturing(self) -> Tuple[Graph, List[Drone]]:
+        """Read the map file and build the graph and drone list.
+
+        Raises:
+            ValueError: If nb_drones is not the first declaration.
+            ValueError: If a hub type is unknown.
+            ValueError: If a line type is unrecognized.
+            ValueError: If start_hub or end_hub is missing.
+            ValueError: If there are no connections.
+
+        Returns:
+            Tuple[Graph, List[Drone]]: The populated graph and
+                list of drones ready for simulation.
+        """
         line_processed: List[str]
         with open(self.route, 'r', encoding='utf-8') as file:
             for line in file:
                 line_processed = line.strip().split()
-                if not line_processed or line_processed[0] == "#":
+                if not line_processed or line_processed[0].startswith("#"):
                     continue
                 if len(self.drones) == 0 and line_processed[0] != "nb_drones:":
                     raise ValueError(
@@ -149,4 +220,8 @@ class Parser:
             if len(self.start_end) != 2:
                 raise ValueError(
                     "It's mandatory being only one start and one end hub")
+            if len(self.graph.connections) < 1:
+                raise ValueError(
+                    "without connections it's imposible to "
+                    "reach the goal zone")
         return (self.graph, self.drones)

@@ -6,9 +6,21 @@ import heapq
 
 
 class Dijkstra:
+    """Turn-aware Dijkstra pathfinding that avoids congestion."""
+
     def __init__(self, graph: Graph, start: Zone, end: Zone,
                  reservations: Union[Dict[int, Dict[str, int]],
                                      None] = None) -> None:
+        """Initialize pathfinder with graph and reservation state.
+
+        Args:
+            graph (Graph): The zone graph to search.
+            start (Zone): Origin zone for the path.
+            end (Zone): Destination zone for the path.
+            reservations (Union[Dict[int, Dict[str, int]], None], optional):
+                Per-turn occupancy map {turn: {zone/conn name: count}}.
+                Defaults to None.
+        """
         self.graph: Graph = graph
         self.start: Zone = start
         self.end: Zone = end
@@ -21,6 +33,18 @@ class Dijkstra:
     def rebuild(self, after: Tuple[Zone, int],
                 previous: Dict[Tuple[Zone, int],
                 Tuple[Zone, int]]) -> List[Union[Zone, Connection]]:
+        """Reconstruct the path from start to end using the previous map.
+
+        Args:
+            after (Tuple[Zone, int]): The destination node and its cost.
+            previous (Dict[Tuple[Zone, int], Tuple[Zone, int]]):
+                Map of each (zone/conn, cost) to its predecessor
+                (zone/conn, cost).
+
+        Returns:
+            List[Union[Zone, Connection]]: Ordered path including
+                zones and connections for restricted zone transit.
+        """
         path: List[Union[Zone, Connection]] = []
         unpacked_after: Union[Zone, Connection]
         unpacked_before: Union[Zone, Connection]
@@ -41,26 +65,50 @@ class Dijkstra:
                             path.append(conn)
                             break
                 path.append(unpacked_before)
-                # if unpacked_before == self.start:
-                #     break
                 after = before
         path.reverse()
         return path
 
     @staticmethod
     def penalty(zone: Zone) -> int:
+        """Return tie-breaking penalty for the priority queue.
+
+        Args:
+            zone (Zone): The zone to evaluate.
+
+        Returns:
+            int: 0 for priority zones, 1 otherwise.
+        """
         if zone.zone_type == "priority":
             return 0
         return 1
 
     @staticmethod
     def real_cost(zone: Zone) -> int:
+        """Return the movement cost to enter a zone.
+
+        Args:
+            zone (Zone): The target zone.
+
+        Returns:
+            int: 1 for normal/priority zones, 2 for restricted.
+        """
         if zone.zone_type in ["normal", "priority"]:
             return 1
         return 2
 
     def congested_area(self, accumulated_cost: int,
                        neighbor: Zone, conn: Connection) -> bool:
+        """Check if moving to a neighbor would exceed capacity limits.
+
+        Args:
+            accumulated_cost (int): The turn at which the drone would arrive.
+            neighbor (Zone): The candidate zone to move into.
+            conn (Connection): The connection used to reach the neighbor.
+
+        Returns:
+            bool: True if the move is blocked by congestion.
+        """
         conn_turn = (accumulated_cost - 1
                      if neighbor.zone_type == "restricted"
                      else accumulated_cost)
@@ -75,6 +123,15 @@ class Dijkstra:
         return False
 
     def dijkstra(self) -> List[Union[Zone, Connection]]:
+        """Run the pathfinding algorithm from start to end.
+
+        Raises:
+            ValueError: If the end zone is unreachable.
+
+        Returns:
+            List[Union[Zone, Connection]]: The shortest path as a
+                sequence of zones and connections.
+        """
         poped: Zone = Zone("none", 0, 0)
         poped_tuple: Tuple[int, int, Zone]
         neighbor: Union[Zone, None] = None

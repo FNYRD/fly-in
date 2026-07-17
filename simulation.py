@@ -7,7 +7,15 @@ from typing import Dict, List, Union, Optional
 
 
 class Simulation:
+    """Orchestrates pathfinding for all drones and tracks reservations."""
+
     def __init__(self, graph: Graph, drones: List[Drone]) -> None:
+        """Initialize the simulation with a graph and drone list.
+
+        Args:
+            graph (Graph): The navigation graph.
+            drones (List[Drone]): List of drones to route.
+        """
         self.graph: Graph = graph
         self.drones: List[Drone] = drones
         self.reservations: Union[Dict[int, Dict[str, int]], None] = {}
@@ -21,6 +29,14 @@ class Simulation:
 
     def calculating_reservations(self,
                                  path: List[Union[Zone, Connection]]) -> None:
+        """Update the reservation map with a drone's path occupancy.
+
+        Args:
+            path (List[Union[Zone, Connection]]): The drone's computed path.
+
+        Raises:
+            RuntimeError: If two consecutive zones lack a connection.
+        """
         n_reserves: int = 0
         connection_name: Optional[Connection]
         current: Union[Zone, Connection]
@@ -65,6 +81,12 @@ class Simulation:
 
     def populate_logs(self, drone: Drone,
                       path: List[Union[Zone, Connection]]) -> None:
+        """Record drone movements into the per-turn log.
+
+        Args:
+            drone (Drone): The drone whose movements to log.
+            path (List[Union[Zone, Connection]]): The drone's path.
+        """
         entry: str = ""
         for i in range(1, len(path)):
             if path[i - 1] == path[i]:
@@ -76,6 +98,8 @@ class Simulation:
                 self.logs[i - 1].append(entry)
 
     def simulating(self) -> None:
+        """Run pathfinding for each drone
+        sequentially, updating reservations."""
         path: List[Union[Zone, Connection]] = []
         if self.start and self.end:
             path = Dijkstra(self.graph, self.start, self.end).dijkstra()
@@ -93,6 +117,7 @@ class Simulation:
                 self.populate_logs(drone, path)
 
     def output(self) -> None:
+        """Print the simulation log, one line per turn."""
         for logs in self.logs:
             for log in logs:
                 print(log, end=" ")

@@ -232,15 +232,19 @@ Secciones obligatorias:
 
 ## Briefing para el siguiente agente
 
-**Fecha:** 2026-07-14 (actualizado)
+**Fecha:** 2026-07-16 (actualizado)
 
 ### Qué se hizo
 
 - FASE 0, FASE 1 y FASE 2 completas.
 - FASE 3 en progreso:
-  - **Paso 0 (Dead code):** ✅ borrados `drone_in`/`drone_out`/`is_full`/`drone_count`/`get_position`/`deactive`.
-  - **Paso 1 (Mover a raíz):** ✅ todos los `.py` en la raíz, imports corregidos, 14 tests pasando.
-  - **Paso 2 (Pygame):** ✅ completo — menú de mapa y modo, zonas, conexiones, drones como cuadricópteros, controles manual/auto, ESC vuelve al menú.
+  - **Paso 0 (Dead code):** ✅
+  - **Paso 1 (Mover a raíz):** ✅
+  - **Paso 2 (Pygame):** ✅ menú, zonas con nombres, conexiones, drones cuadricóptero, controles manual/auto.
+  - **Paso 3 (Main + Docstrings):** ✅ `fly.py` OOP (clase `TerminalSim`) con menú terminal/pygame, excepciones `(ValueError, OSError, RuntimeError)`. Docstrings Google style en 9 archivos. `view.py` OOP (clase `View`). Parser: validación mínimo una conexión, `startswith("#")`.
+  - **Paso 4 (Makefile):** ✅ 7 reglas completas (`install`, `run`, `debug`, `clean`, `test`, `lint`, `lint-strict`), todas con venv `.fly_in`, tests excluidos de lint.
+  - **Paso 5 (Linting):** ✅ `flake8`, `mypy` y `lint-strict` pasan sin errores.
+  - **Paso 6 (Opción terminal/pygame):** ✅ menú en `fly.py`.
 
 ### Estructura de archivos actual
 
@@ -251,10 +255,10 @@ fly_in/
   parser.py                           ← lee archivo de mapa
   dijkstra.py                         ← pathfinding turn-aware
   simulation.py                       ← orquesta paths y reservas
-  view.py                             ← visualización pygame (completa)
-  fly.py                              ← entry point (pendiente main real)
+  view.py                             ← visualización pygame (clase View)
+  fly.py                              ← entry point (clase TerminalSim + menú)
   conftest.py                         ← marca raíz para pytest
-  Makefile                            ← incompleto: solo `test` y `clean`
+  Makefile                            ← completo (7 reglas)
   views.jpg                           ← imagen de fondo para pygame
   tests/
     test_pytest.py                    ← 14 tests (4 correctitud + 10 benchmark)
@@ -267,4 +271,4 @@ fly_in/
 
 ### Siguiente paso
 
-Paso 3 de FASE 3: crear `main.py` (orquesta Parser → Simulation → output), manejo de excepciones, docstrings. Luego Makefile, linting y README.
+Paso 7: README en inglés (Description, Instructions, Resources, Algorithm, Visual Representation). Luego revisión final contra evaluation sheet y texto subrayado del subject.

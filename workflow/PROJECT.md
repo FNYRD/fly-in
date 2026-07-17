@@ -1,14 +1,14 @@
 ---
 proyecto: Fly-in
 fecha_inicio: 2026-06-18
-fase_actual: FASE 2
+fase_actual: FASE 3
 estado: en_progreso
 tags: [42, proyecto]
 ---
 
 # PROJECT.md
 
-## Fase actual: `FASE 2 — IMPLEMENTACIÓN`
+## Fase actual: `FASE 3 — INTEGRACIÓN Y VALIDACIÓN`
 
 ---
 
@@ -557,24 +557,34 @@ Archivo: `view.py`. Usa `pygame-ce` (Community Edition, misma API que pygame; el
 - [x] Controles: flechas izq/der (manual), avance automático, ESC vuelve al menú
 - [x] Indicador de turno y nombre del mapa en pantalla
 
-#### 3. Main
-- [ ] Crear `main.py` que orqueste Parser → Simulation → output
-- [ ] Manejo de excepciones (`try/except`) — el programa no debe crashear con excepciones no manejadas
-- [ ] Docstrings en todas las clases y métodos
+#### 3. Main + Docstrings ✅ (2026-07-15)
+- [x] `fly.py` ya existía como entry point (Parser → Simulation → output)
+- [x] Manejo de excepciones (`try/except (ValueError, OSError, RuntimeError)`)
+- [x] Imprime total de turnos antes del output
+- [x] Validación añadida en parser: mínimo una conexión, comentarios con `#` pegado (`startswith`)
+- [x] Docstrings Google style en todas las clases y métodos (8 archivos: zone, connection, graph, drone, parser, dijkstra, simulation, view, fly)
+- [x] `view.py` convertido a OOP (clase `View` encapsula todo)
+- [x] `fly.py` convertido a OOP (clase `TerminalSim`) con menú para elegir terminal o pygame
 
-#### 4. Makefile
-- [ ] Completar reglas faltantes: `install`, `run`, `debug`, `lint`, `lint-strict` (ver `HANDOFF.md` §Makefile)
+#### 4. Makefile ✅ (2026-07-16)
+- [x] Reglas completas: `install`, `run`, `debug`, `clean`, `test`, `lint`, `lint-strict`
+- [x] Todas usan venv `.fly_in`
+- [x] `lint` y `lint-strict` excluyen `tests/`
 
-#### 5. Linting
-- [ ] `flake8` sin errores (todos los archivos)
-- [ ] `mypy` sin errores (todos los archivos)
+#### 5. Linting ✅ (2026-07-16)
+- [x] `flake8` sin errores
+- [x] `mypy` sin errores
+- [x] `lint-strict` pasa
 
-#### 6. README
+#### 6. Opción simulación/terminal ✅ (2026-07-16)
+- [x] Menú en `fly.py` para elegir terminal o pygame
+
+#### 7. README
 - [ ] En inglés, con todas las secciones obligatorias: Description, Instructions, Resources, Algorithm, Visual Representation
 
 ### Revisión final
 
-- [ ] Subject releído por agente
+- [ ] Verificar contra la evaluation sheet y con el texto subrayado del subject
 - [ ] Proyecto revisado contra requisitos
 - [ ] Reporte generado
 
