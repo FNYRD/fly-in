@@ -232,7 +232,7 @@ Secciones obligatorias:
 
 ## Briefing para el siguiente agente
 
-**Fecha:** 2026-07-16 (actualizado)
+**Fecha:** 2026-07-18 (actualizado)
 
 ### Qué se hizo
 
@@ -245,6 +245,7 @@ Secciones obligatorias:
   - **Paso 4 (Makefile):** ✅ 7 reglas completas (`install`, `run`, `debug`, `clean`, `test`, `lint`, `lint-strict`), todas con venv `.fly_in`, tests excluidos de lint.
   - **Paso 5 (Linting):** ✅ `flake8`, `mypy` y `lint-strict` pasan sin errores.
   - **Paso 6 (Opción terminal/pygame):** ✅ menú en `fly.py`.
+  - **Paso 7 (Tests contra la hoja de evaluación `Flyin-ev.pdf`):** 🔄 en curso. 19 tests pasando. Cubiertas: Zone occupancy, Movement costs (4 tests con grafos a mano), Connection capacity, formato de output. Visual Representation verificada a mano (se defiende en vivo). Pendientes: Edge cases / error handling, y ensayar el Live Coding (`--capacity-info`).
 
 ### Estructura de archivos actual
 
@@ -260,15 +261,48 @@ fly_in/
   conftest.py                         ← marca raíz para pytest
   Makefile                            ← completo (7 reglas)
   views.jpg                           ← imagen de fondo para pygame
+  README.md                           ← VACÍO (0 bytes) — pendiente
+  DEFENSA.md                          ← guion completo del peer-review (no entregable)
   tests/
-    test_pytest.py                    ← 14 tests (4 correctitud + 10 benchmark)
+    test_pytest.py                    ← 19 tests (3 correctitud + 4 movement costs
+                                        + 1 connection capacity + 1 output format
+                                        + 10 benchmark)
   maps/
     easy/ medium/ hard/ challenger/
+    extra/                            ← mapas hechos para tests
   fly-in.pdf
+  Flyin-ev.pdf                        ← hoja de evaluación del peer-review
   workflow/
     SYSTEM.md, HANDOFF.md, PROJECT.md, dossier_pygame.md
 ```
 
+> [!info] Leer también `DEFENSA.md` (en la raíz del proyecto, no en `workflow/`)
+> Guion completo del peer-review escrito el 2026-07-18: arquitectura, Dijkstra turn-aware explicado a fondo (con una traza paso a paso de la arista de espera y de `rebuild`), el import circular, el modelo de reservas, las preguntas del subject con respuesta, la guía del live coding `--capacity-info` y las debilidades conocidas.
+> **Es la fuente más completa sobre cómo funciona el proyecto.** No es entregable: está en español y es documentación interna.
+
 ### Siguiente paso
 
-Paso 7: README en inglés (Description, Instructions, Resources, Algorithm, Visual Representation). Luego revisión final contra evaluation sheet y texto subrayado del subject.
+Por orden de prioridad:
+
+1. **README en inglés**, hoy vacío (0 bytes): Description, Instructions, Resources (incluida la descripción del uso de IA, obligatoria), Algorithm, Visual Representation, y "Example input and expected output" que pide la hoja. **Es el único requisito duro que falta.**
+2. **Decidir si `workflow/` y `DEFENSA.md` se entregan.** `workflow/` sigue trackeado (7 archivos); `DEFENSA.md` está en la raíz sin trackear. Ambos son documentación interna en español.
+3. **Ensayar el live coding** `--capacity-info` sobre una copia del proyecto (guía en `DEFENSA.md` §12).
+4. **Revisión final** contra la evaluation sheet y el texto subrayado del subject.
+
+Los tests contra la hoja de evaluación se dieron por cerrados: los casos de error del parser y los edge cases se demuestran en vivo editando el mapa, no necesitan tests automatizados (los tests ni siquiera son entregable).
+
+> [!success] RESUELTO (2026-07-18) — `.gitignore` y venv desindexado
+> El venv `.fly_in/` estaba commiteado entero (3371 de 3415 archivos trackeados) y no había `.gitignore`, que el subject exige en III.3. La hoja avisa en Preliminaries: *"Check that only the requested files are available in the git repository. **If not, the evaluation stops here.**"*
+> Hecho: `.gitignore` creado (venv, artefactos Python, cachés, `.DS_Store`) y desindexados `.fly_in/`, los `.DS_Store`, `workflow/.obsidian/` y `tests/lazy_tests.py`. **De 3415 a 37 archivos trackeados**, venv intacto en disco, 19 tests pasando.
+> **Ojo: está en el índice, sin commitear.** Y el venv seguirá en el historial aunque se commitee (limpiarlo del todo requeriría reescribir la historia).
+
+> [!danger] RECORDAR AL ESTUDIANTE EN LA MÁQUINA DE 42 (anotado 2026-07-18)
+> Allá usará **pygame** (no pygame-ce) y un **Python menor**. Al llegar hay que:
+> 1. Cambiar `requirements.txt` de `pygame-ce` a `pygame` (ce se eligió solo porque el original no compila en Python 3.14, que es el de la máquina actual).
+> 2. Correr `make lint` y decidir sobre los `# type: ignore[attr-defined]` de `view.py:50` y `view.py:52`. Con pygame-ce sobran y hacen fallar el lint; con los stubs de pygame pueden ser necesarios. **Se dejan puestos a propósito** hasta comprobarlo allá.
+>
+> Detalle ya comprobado: los `# type: ignore` **no están prohibidos** por el subject ni por la hoja de evaluación. El Makefile obligatorio incluye `--warn-unused-ignores`, que solo rechaza los que sobran.
+
+> [!warning] Deuda menor en los tests (2026-07-18)
+> - `maps/extra/for_normla_tests.txt` (typo de "normal") es una **copia del mapa challenger** — 25 drones. Funciona como fixture pero no es un mapa "normal"; revisar si es lo que se quiere.
+> - La fixture `simulation` traga la excepción con un `print` y luego hace `return sim`: si el parseo o la simulación fallan, `sim` queda sin asignar y revienta con `UnboundLocalError` en vez de un mensaje claro. El segundo `except FileNotFoundError` es además inalcanzable (ya está en la tupla del primero).

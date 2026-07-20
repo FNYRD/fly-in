@@ -15,23 +15,24 @@ TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 @pytest.fixture
 def simulation() -> Simulation:
     folder: str = "extra"
-    map_: str = "for_blocked_tests.txt"
-    try:
-        route = os.path.join(TEST_DIR, "..", "maps", folder,
+    blocked: str = "for_blocked_tests.txt"
+    normal: str = "for_normla_tests.txt"
+    map_: str = normal
+    sim: Simulation
+    graph: Graph
+    drones: List[Drone]
+    route: str = ""
+    route = os.path.join(TEST_DIR, "..", "maps", folder,
                             map_)
-        graph, drones = Parser(route).manufacturing()
-        sim = Simulation(graph, drones)
-        sim.simulating()
-        return sim
-    except (ValueError, FileNotFoundError, RuntimeError) as e:
-        print(f"Error: {e}")
-    except FileNotFoundError:
-        print("File route doesn't exits")
+    graph, drones = Parser(route).manufacturing()
+    sim = Simulation(graph, drones)
+    sim.simulating()
+    return sim
 
 
 def test_capacity_respected(simulation: Simulation) -> None:
     """This test checks if at an especific turn the whole drone's
-    load in an especific zone or connection don't exceeds the its capacity"""
+    loaded in an especific zone or connection don't exceeds the its capacity"""
     sim = simulation
     zone_limits: Dict[str, int] = {
         z.name: z.max_drones for z in sim.graph.zones.values()
@@ -47,6 +48,14 @@ def test_capacity_respected(simulation: Simulation) -> None:
             if turn >= len(drone.path):
                 continue
             pos = drone.path[turn]
+            if turn != 0 and (isinstance(pos, Zone) and
+                              isinstance(drone.path[turn - 1], Zone)
+                              ):
+                if drone.path[turn] != drone.path[turn - 1]:
+                    conn = pos.get_connection(drone.path[turn - 1])
+                    if conn is not None:
+                        conn_count[conn.name] = (
+                            conn_count.get(conn.name, 0) + 1)                    
             if isinstance(pos, Zone):
                 zone_count[pos.name] = (
                     zone_count.get(pos.name, 0) + 1)
@@ -55,10 +64,10 @@ def test_capacity_respected(simulation: Simulation) -> None:
                     conn_count.get(pos.name, 0) + 1)
         for name, count in zone_count.items():
             if name in zone_limits and sim.graph.zones[name].relevant:
-                 assert count >= zone_limits[name], (f"T{turn}: start or goal zone"
-                 "cannot handle multiple drones at the same time!"
-                 )
-                 continue
+                assert count >= zone_limits[name], (f"T{turn}: start or goal zone"
+                                                    "cannot handle multiple drones at the same time!"
+                                                    )
+                continue
             if name in zone_limits:
                 assert count <= zone_limits[name], (
                     f"T{turn}: zone '{name}' has {count} drones, "
@@ -69,18 +78,6 @@ def test_capacity_respected(simulation: Simulation) -> None:
                     f"T{turn}: connection '{name}' has {count} "
                     f"drones, max is {conn_limits[name]}")
 
-def test_no_blocked_zones(simulation: Simulation) -> None:
-    """This test checks that blocked zones aren't inaccessibles
-    cases when the only path to reach the end vertex it's a
-    blocked zone, the algorithm will raise and unreachable end
-    node using ValueError"""
-    sim = simulation
-    for drone in sim.drones:
-        for i, pos in enumerate(drone.path):
-            if isinstance(pos, Zone):
-                assert pos.zone_type != "blocked", (
-                    f"{drone.id} T{i}: is in blocked zone "
-                    f"'{pos.name}'")
 
 def test_all_drones_reach_end(simulation: Simulation) -> None:
     """This test will traverse the drone's path and varify
@@ -97,6 +94,9 @@ def test_all_drones_reach_end(simulation: Simulation) -> None:
 
 
 def test_paths_are_valid(simulation: Simulation) -> None:
+    """This function tests that two continuous zones have a real
+    connection between them and that when a drone stays at a connetion
+    it's because the next zone is type restricted"""
     sim = simulation
     for drone in sim.drones:
         for i in range(1, len(drone.path)):
@@ -127,6 +127,159 @@ def test_paths_are_valid(simulation: Simulation) -> None:
                     f"Connections in path")
 
 
+
+# ============================================================
+# Movement costs
+# ============================================================
+
+def _link(graph: Graph, zone1: Zone, zone2: Zone) -> Connection:
+    """Build a connection and register it in the graph and both zones."""
+    conn = Connection(zone1, zone2)
+    graph.add_connection(conn)
+    zone1.add_connection(conn)
+    zone2.add_connection(conn)
+    return conn
+
+
+def _run_graph(graph: Graph, n_drones: int = 1) -> Simulation:
+    """Run a simulation over a hand built graph."""
+    drones = [Drone(f"D{i}") for i in range(1, n_drones + 1)]
+    sim = Simulation(graph, drones)
+    sim.simulating()
+    return sim
+
+
+def test_movement_cost_normal() -> None:
+    """A normal zone costs 1 turn: start and end are adjacent in
+    the path, with no connection in between."""
+    graph = Graph()
+    start = Zone("start", 0, 0, relevant="start_hub")
+    end = Zone("end", 1, 0, relevant="end_hub")
+    for zone in (start, end):
+        graph.add_zone(zone)
+    _link(graph, start, end)
+
+    path = _run_graph(graph).drones[0].path
+    assert len(path) == 2, (
+        f"normal zone: path has {len(path)} steps, expected 2")
+    assert path == [start, end], (
+        f"normal zone: unexpected path {[p.name for p in path]}")
+
+
+def test_movement_cost_restricted() -> None:
+    """A restricted zone costs 2 turns: the connection is inserted
+    in the path as the transit turn before arriving."""
+    graph = Graph()
+    start = Zone("start", 0, 0, relevant="start_hub")
+    middle = Zone("middle", 1, 0, zone_type="restricted")
+    end = Zone("end", 2, 0, relevant="end_hub")
+    for zone in (start, middle, end):
+        graph.add_zone(zone)
+    conn = _link(graph, start, middle)
+    _link(graph, middle, end)
+
+    path = _run_graph(graph).drones[0].path
+    assert len(path) == 4, (
+        f"restricted zone: path has {len(path)} steps, expected 4 "
+        f"(start, transit, restricted, end)")
+    assert path == [start, conn, middle, end], (
+        f"restricted zone: unexpected path {[p.name for p in path]}")
+
+
+def test_movement_cost_priority_preferred() -> None:
+    """Both routes cost the same, so the tie break must send the
+    drone through the priority zone."""
+    graph = Graph()
+    start = Zone("start", 0, 0, relevant="start_hub")
+    fast = Zone("fast", 1, 1, zone_type="priority")
+    slow = Zone("slow", 1, -1)
+    end = Zone("end", 2, 0, relevant="end_hub")
+    for zone in (start, fast, slow, end):
+        graph.add_zone(zone)
+    _link(graph, start, fast)
+    _link(graph, start, slow)
+    _link(graph, fast, end)
+    _link(graph, slow, end)
+
+    path = _run_graph(graph).drones[0].path
+    assert len(path) == 3, (
+        f"priority zone: path has {len(path)} steps, expected 3")
+    assert path[1] == fast, (
+        f"priority zone: drone went through '{path[1].name}', "
+        f"expected the priority zone 'fast'")
+
+
+def test_movement_cost_blocked_is_unreachable() -> None:
+    """A blocked zone is inaccessible: if it is the only route to
+    the end, the algorithm reports the end as unreachable."""
+    graph = Graph()
+    start = Zone("start", 0, 0, relevant="start_hub")
+    wall = Zone("wall", 1, 0, zone_type="blocked")
+    end = Zone("end", 2, 0, relevant="end_hub")
+    for zone in (start, wall, end):
+        graph.add_zone(zone)
+    _link(graph, start, wall)
+    _link(graph, wall, end)
+
+    with pytest.raises(ValueError):
+        _run_graph(graph)
+
+
+# ============================================================
+# Connection capacity
+# ============================================================
+
+def test_connection_capacity() -> None:
+    """A connection with max_link_capacity 3 lets three drones
+    traverse it at the same turn, so none of them has to wait and
+    all three share the very same path."""
+    graph = Graph()
+    start = Zone("start", 0, 0, relevant="start_hub")
+    end = Zone("end", 1, 0, relevant="end_hub")
+    for zone in (start, end):
+        graph.add_zone(zone)
+    conn = Connection(start, end, max_link_capacity=3)
+    graph.add_connection(conn)
+    start.add_connection(conn)
+    end.add_connection(conn)
+
+    sim = _run_graph(graph, 3)
+    for drone in sim.drones:
+        assert drone.path == [start, end], (
+            f"{drone.id}: expected a direct move with no waiting, "
+            f"got {[p.name for p in drone.path]}")
+
+
+# ============================================================
+# Output format
+# ============================================================
+
+def test_output_format() -> None:
+    """On a linear map with default capacity 1 the three drones are
+    forced to queue. Each output line must name every drone at most
+    once, a waiting drone must be omitted instead of repeated from
+    the previous line, and D3 must be the last one to arrive."""
+    graph = Graph()
+    start = Zone("start", 0, 0, relevant="start_hub")
+    middle = Zone("middle", 1, 0)
+    end = Zone("end", 2, 0, relevant="end_hub")
+    for zone in (start, middle, end):
+        graph.add_zone(zone)
+    _link(graph, start, middle)
+    _link(graph, middle, end)
+
+    logs = _run_graph(graph, 3).logs
+    for turn, line in enumerate(logs):
+        ids = [entry.split("-")[0] for entry in line]
+        assert len(ids) == len(set(ids)), (
+            f"T{turn}: a drone is printed more than once in {line}")
+    for turn in range(1, len(logs)):
+        repeated = set(logs[turn]) & set(logs[turn - 1])
+        assert not repeated, (
+            f"T{turn}: {repeated} already appeared on the previous "
+            f"line, a waiting drone must be omitted")
+    assert logs[-1] == ["D3-end"], (
+        f"the last line should be D3 arriving alone, got {logs[-1]}")
 
 
 # ============================================================

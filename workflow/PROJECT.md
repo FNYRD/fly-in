@@ -468,15 +468,40 @@ Archivo: `clases/simulation/simulation.py`. Los 4 métodos (`calculating_reserva
 - **(2026-07-13)** mypy: `path[i]`/`path[i-1]` como `Union[Zone, Connection]` no se narroweaba con `isinstance` en expresión indexada — mypy no propaga narrowing sobre accesos con índice variable. Corregido extrayendo a variables locales `current`/`prev` antes del `isinstance`.
 - **(2026-07-13)** `calculating_reservations` no manejaba esperas (`prev == current`): al buscar `get_connection` de una zona consigo misma retornaba `None` → `RuntimeError`. Corregido con `if current != prev:` envolviendo el bloque de conexión (la reserva de zona sí se hace, la de conexión se salta).
 
-### Tests Bloque 4 — pytest (COMPLETOS — 14 tests pasando, 2026-07-13)
+### Tests Bloque 4 — pytest (19 tests pasando, actualizado 2026-07-18)
 
 Archivo: `tests/test_pytest.py`. Framework: `pytest` (confirmado válido por subject §III.3). Se requiere `conftest.py` vacío en la raíz del repo para que pytest agregue la raíz a `sys.path`.
 
-**Tests de correctitud (4)** — usan fixture `simulation` con mapa `01_dead_end_trap.txt`:
+**Tests de correctitud (3)** — usan fixture `simulation` con mapa `maps/extra/for_normla_tests.txt`:
 - [x] `test_capacity_respected` — reconstruye ocupación turno a turno desde los paths de todos los drones; verifica que ninguna zona ni conexión excede `max_drones`/`max_link_capacity`. Excluye start/end (exentos de capacidad).
 - [x] `test_all_drones_reach_end` — último elemento del path de cada dron es `Zone` con `relevant == "end_hub"`.
 - [x] `test_paths_are_valid` — cada par consecutivo en el path está conectado (Zone→Zone: conexión existe, Zone→Connection: zona del otro lado es restricted, Connection→Zone: ídem, mismo→mismo: espera válida). Dos Connections seguidas = fallo.
-- [x] `test_no_blocked_zones` — ningún dron tiene una zona `blocked` en su path.
+
+> [!warning] Hueco cerrado en `test_capacity_respected` (2026-07-18)
+> El test reconstruía la ocupación desde `drone.path`, y el path **solo contiene objetos `Connection` en los tránsitos restricted** — en un movimiento normal `Zone→Zone` la conexión atravesada no aparece como elemento. Resultado: `max_link_capacity` no se verificaba en ningún movimiento normal.
+>
+> No era un bug del algoritmo: `congested_area` (`dijkstra.py`) chequea la conexión siempre (solo ajusta el turno: `accumulated_cost - 1` si el destino es restricted, `accumulated_cost` si es normal), y `calculating_reservations` (`simulation.py`) sí reserva la conexión de los movimientos normales.
+>
+> **Fix:** el test deriva la conexión de los pares `(path[turn-1], path[turn])` cuando ambos son `Zone` y distintos, y la acumula en `conn_count` con el turno de **llegada** (`turn`), igual que hace Simulation. No hay doble conteo porque un par `(Zone, Zone)` nunca tiene destino restricted (la `Connection` intercalada rompe el par). El caso de espera (`prev == current`) salta solo la derivación, **no** el conteo de zona — un dron esperando sigue ocupando la zona.
+
+> [!note] Decisión sobre `Zone`/`Connection` como fuente de verdad
+> Se descartó asertar sobre `sim.reservations`: el valor del test está en reconstruir la ocupación por una vía distinta a la del código bajo prueba. Si `calculating_reservations` tuviera un bug, un test apoyado en `reservations` lo heredaría en vez de detectarlo.
+
+**Tests de movement costs (4)** — construyen el `Graph` a mano, sin pasar por el Parser (2026-07-18):
+- [x] `test_movement_cost_normal` — start→end normal: path `[start, end]`, len 2 (1 turno).
+- [x] `test_movement_cost_restricted` — restricted como zona **intermedia** (no como end, para no mezclar el coste con `relevant`): path `[start, conn, middle, end]`, len 4 (2 turnos de tránsito).
+- [x] `test_movement_cost_priority_preferred` — dos rutas de **coste idéntico** (ambas intermedias de 1 turno, una `priority`); verifica que `path[1]` es la priority. El coste igual es obligatorio: `penalty` va en la posición 2 de la tupla del heap, o sea que solo desempata entre estados con el mismo `cost`.
+- [x] `test_movement_cost_blocked_is_unreachable` — blocked como única ruta → `pytest.raises(ValueError)`.
+
+> [!info] Helpers para grafos a mano
+> `_link(graph, zone1, zone2)` registra la conexión en el graph **y en ambas zonas** — Dijkstra itera `poped.connections`, así que sin el registro en las zonas el grafo queda vacío para el pathfinding. `_run_graph(graph, n_drones=1)` instancia los drones y corre la simulación.
+> Las zonas necesitan `relevant="start_hub"`/`"end_hub"` explícito: `Simulation.__init__` resuelve start/end por ese campo, y sin él quedan `None`, el guard no ejecuta nada y sale un path vacío en vez de un error visible.
+
+**Test de connection capacity (1)** — 2026-07-18:
+- [x] `test_connection_capacity` — start→end con `max_link_capacity=3` y 3 drones: los tres comparten el path `[start, end]`, ninguno espera. Cubre el bullet *"multiple drones can traverse high-capacity connections simultaneously"* de la hoja de evaluación, que `test_capacity_respected` no cubre (ese solo asegura el límite superior `count <= limit`; si el algoritmo serializara todo a 1 dron por turno pasaría igual).
+
+**Test de output format (1)** — 2026-07-18:
+- [x] `test_output_format` — mapa lineal `start→middle→end` con capacidad 1 y 3 drones, que fuerza cola. Verifica sobre `sim.logs`: (a) ningún dron impreso dos veces en la misma línea (`len(ids) == len(set(ids))`), (b) ninguna entrada repetida entre líneas consecutivas (`set(logs[t]) & set(logs[t-1])` vacío) — un dron que espera debe omitirse, no repetirse, (c) la última línea es `["D3-end"]`.
 
 **Tests de benchmark (10)** — un test por mapa, verifica turnos ≤ target del subject:
 - [x] Easy: `linear_path` ≤6, `simple_fork` ≤8, `basic_capacity` ≤6
@@ -571,16 +596,62 @@ Archivo: `view.py`. Usa `pygame-ce` (Community Edition, misma API que pygame; el
 - [x] Todas usan venv `.fly_in`
 - [x] `lint` y `lint-strict` excluyen `tests/`
 
-#### 5. Linting ✅ (2026-07-16)
-- [x] `flake8` sin errores
-- [x] `mypy` sin errores
-- [x] `lint-strict` pasa
+#### 5. Linting ✅ (2026-07-16) — con una verificación pendiente en 42
+
+- [x] `flake8` sin errores sobre el código del proyecto
+- [x] `mypy --strict` sin errores sobre el código del proyecto
+
+> [!warning] RECORDATORIO PARA EL PRÓXIMO AGENTE — verificar en la máquina de 42
+> **Recordarle al estudiante que compruebe esto al llegar a 42**, donde usará **pygame** (no pygame-ce) y una versión **menor** de Python:
+>
+> 1. **Instalar pygame en vez de pygame-ce.** Hoy `requirements.txt` declara `pygame-ce >= 2.5.7` y es lo instalado. Se eligió ce porque el pygame original no compilaba en Python 3.14 (esta máquina); en 42 el Python es menor, así que el original debería instalar. Hay que actualizar `requirements.txt` al cambiar.
+> 2. **Re-verificar los `# type: ignore[attr-defined]` de `view.py:50` y `view.py:52`** (`screen_info.current_w` / `current_h`). En esta máquina, con pygame-ce 2.5.7 + py3.14, **sobran** → `make lint` y `make lint-strict` fallan con `Unused "type: ignore" comment` (`--warn-unused-ignores` es parte de la regla obligatoria del subject, no solo de `--strict`). Comprobado en copia: quitándolos, `mypy --strict` da *Success: no issues found in 10 source files* y flake8 queda limpio.
+>    **Pero con los stubs de pygame (no ce) pueden volver a ser necesarios**, así que se dejan puestos y se decide allá corriendo `make lint`.
+> **Comprobado que los `# type: ignore` NO están prohibidos** (2026-07-18): ni el subject ni la hoja de evaluación los mencionan. Al contrario, el Makefile obligatorio del subject (III.2) incluye `--warn-unused-ignores`, flag que solo tiene sentido si los ignores usados se dan por válidos — lo único que se rechaza es que sobren.
+
+> [!note] Ruido no entregable
+> `workflow/test_example.py` dispara `E999 SyntaxError` en flake8 (plantilla del sistema con `from ` incompleto, del commit inicial). El Makefile solo excluye `.fly_in` y `tests`. `workflow/` **no se entrega**, así que desaparece al sacar la carpeta del repo — pero hasta entonces `make lint` falla en local por esto.
 
 #### 6. Opción simulación/terminal ✅ (2026-07-16)
 - [x] Menú en `fly.py` para elegir terminal o pygame
 
-#### 7. README
+#### 7. Adaptar los tests a la hoja de evaluación (`Flyin-ev.pdf`) — EN CURSO (2026-07-18)
+
+Recorrido sección por sección del PDF de evaluación, añadiendo un test por cada bloque testeable. **19 tests pasando.**
+
+- [x] **Zone occupancy rules** — `test_capacity_respected` (con el hueco de `max_link_capacity` en movimientos normales ya cerrado, ver Bloque 4).
+- [x] **Movement costs** — 4 tests nuevos con grafos construidos a mano (normal / restricted / priority / blocked).
+- [x] **Connection capacity** — `test_capacity_respected` cubre el límite superior; `test_connection_capacity` cubre el uso simultáneo de una conexión de alta capacidad.
+- [x] **Visual Representation** — no se testea por unit test: verificado a mano en pygame (los drones esperan, pausan en las conexiones de las restricted y avanzan hasta el end). Se defiende en vivo en el peer-review.
+- [x] **Basic Functionality / formato de output** — `test_output_format`.
+- [x] **Pathfinding Algorithm** (valid path, conflict resolution) — ya cubierto entre `test_paths_are_valid`, los 4 de movement costs y los 10 benchmarks.
+- [x] **Edge Cases and Error Handling** — **decisión (2026-07-18): no se automatizan.** La hoja dice *"test error handling in the parser"*, o sea que el evaluador lo prueba en vivo editando el mapa; y los tests ni siquiera son entregable. El caso menos obvio (grafo desconectado / end inalcanzable) ya está cubierto por `test_movement_cost_blocked_is_unreachable`. Nota: los 26 archivos de casos de error del parser existieron en `tests/test_bloque_2.py` + `tests/files_test/` y se borraron en el commit `2f0411f`; se recuperan con `git show 2f0411f^:tests/test_bloque_2.py` si algún día se quieren.
+- [ ] **Quick Live Coding** — flag `--capacity-info` que imprime la ocupación por turno (`"Zone X: Y/Z drones, Connection A-B: Y/Z capacity used"`). Se pide en vivo, ≤10 min. **Guía completa de resolución en `DEFENSA.md` §12**, con las decisiones ya tomadas (leer `sys.argv` al principio de `menu()`, `ValueError` para argumentos desconocidos, capacidad intercalada turno a turno) y los tres detalles que cuestan minutos. **Ensayarlo sobre una copia del proyecto.**
+
+> [!note] Entorno (2026-07-18)
+> El venv `.fly_in` estaba creado en Linux (`home = /usr/bin`, py 3.10.12, shebangs a `/home/jericard/...`) y no arrancaba en macOS. Recreado con `make install`. `make test` funciona.
+
+#### 8. README
 - [ ] En inglés, con todas las secciones obligatorias: Description, Instructions, Resources, Algorithm, Visual Representation
+- [ ] La hoja de evaluación pide además **"Example input and expected output"** — sección extra que el subject no menciona explícitamente.
+
+#### 9. `.gitignore` + limpiar el repositorio ✅ (2026-07-18)
+
+> [!danger] Por qué era prioritario
+> La hoja dice en Preliminaries: *"Check that only the requested files are available in the git repository. **If not, the evaluation stops here.**"* Y el subject lo pide explícitamente en III.3: *"Include a `.gitignore` file to exclude Python artifacts"*.
+
+- [x] **`.gitignore` creado** en la raíz: venv (`.fly_in/`, `venv/`, `env/`), artefactos Python (`__pycache__/`, `*.py[cod]`, `*.egg-info/`, `build/`, `dist/`), cachés (`.mypy_cache/`, `.pytest_cache/`) y `.DS_Store`.
+- [x] **Venv desindexado.** `.fly_in/` estaba commiteado entero: de 3415 archivos trackeados, 3371 eran del venv. Se sacó con `git rm -r --cached` (sin borrar nada del disco).
+- [x] Desindexados también los dos `.DS_Store`, `workflow/.obsidian/` (config del editor) y `tests/lazy_tests.py` (trackeado pero ya inexistente en disco).
+- [x] **Resultado: 37 archivos trackeados.** Venv intacto en disco y 19 tests pasando tras la limpieza.
+
+> [!warning] Sin commitear todavía (2026-07-18)
+> La desindexación está hecha **en el índice, no commiteada**. Hasta que se commitee, el repo remoto sigue con los 3371 archivos.
+> Y aunque se commitee, **el venv sigue en el historial** (pesa lo que pesa al clonar). Si se quiere un repo limpio de verdad habría que reescribir la historia (`git filter-repo` o similar) — decisión del estudiante; para la evaluación basta con que el árbol actual esté limpio.
+
+> [!question] Pendiente de decidir: ¿`workflow/` se entrega?
+> Sigue trackeado (7 archivos). El estudiante dijo que **no es entregable**, pero no se ha sacado del repo. Igual pasa con `DEFENSA.md`, que ahora está en la raíz y **sin trackear**. Si no se entregan, van al `.gitignore` o se sacan con `git rm -r --cached workflow`.
+> Recordar que `workflow/test_example.py` es lo que dispara el `E999` de flake8 (ver paso 5).
 
 ### Revisión final
 

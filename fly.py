@@ -82,10 +82,12 @@ def menu() -> None:
                 terminal.terminal_sim()
             case 2:
                 view.run()
+            case _:
+                raise ValueError("Wrong option!")
     except (ValueError, FileNotFoundError, RuntimeError) as e:
         print(f"Error: {e}")
-    except FileNotFoundError:
-        print("File route doesn't exits")
+    except (EOFError, KeyboardInterrupt):
+        print("The simulation was stopped abruptly")
 
 
 if __name__ == "__main__":

@@ -4,6 +4,11 @@
 
 # Mejoras:
 
+- [ ] buscar una manera de crear visualizaciones que representen el proyecto para tener una guia visual. usar alguna herramienta ya existente
+- [ ] siempre hacer los test en pytest
+- [ ] conectar con el mcp de notion y trabajar mas visuamente ahi
+- [ ] crear una regla make para hacer commit y push
+- [ ] siempre trabajar con gitignore
 - [ ] Que todos los .md sean optimizados para obsidian, asi hasta el HANDOF me ayuda para entender mejor el subject.
 - [ ] Cambiar restricciones duras por Restricciones Genereales: que cubran todo lo que se restringe en el proyecto
 - [ ] Agregar como instruccione el no hacer presion para continuar o realizar cualquier accion. En vez de decir:   ¿Pasamos a volcar el Bloque 3 al PROJECT.md y continuamos con el Bloque 4?. Mostrar: El resultado y estado actual del problema que se esta solucionando o la solucion que se esta creando y que sea el estudiante quien propone si avanzar o no.
