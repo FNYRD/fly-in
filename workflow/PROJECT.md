@@ -2,7 +2,7 @@
 proyecto: Fly-in
 fecha_inicio: 2026-06-18
 fase_actual: FASE 3
-estado: en_progreso
+estado: cerrado
 tags: [42, proyecto]
 ---
 
@@ -615,9 +615,12 @@ Archivo: `view.py`. Usa `pygame-ce` (Community Edition, misma API que pygame; el
 #### 6. Opción simulación/terminal ✅ (2026-07-16)
 - [x] Menú en `fly.py` para elegir terminal o pygame
 
-#### 7. Adaptar los tests a la hoja de evaluación (`Flyin-ev.pdf`) — EN CURSO (2026-07-18)
+#### 7. Adaptar los tests a la hoja de evaluación (`Flyin-ev.pdf`) — ✅ CERRADO (2026-07-20)
 
 Recorrido sección por sección del PDF de evaluación, añadiendo un test por cada bloque testeable. **19 tests pasando.**
+
+> [!success] Tests refactorizados (2026-07-20)
+> `tests/test_pytest.py` refactorizado por formalidad/coherencia con el resto del proyecto (aunque los tests no son entregable): tipado completo, `flake8` + `mypy --strict` limpios. Cambios: quitados `blocked`/`map_` sin uso (`F841`), narrowing de `prev` a `Zone` con variable local (fix `arg-type` de `get_connection`), líneas partidas (`E501`), indent/whitespace/blank lines. Lógica intacta, 19 tests siguen pasando.
 
 - [x] **Zone occupancy rules** — `test_capacity_respected` (con el hueco de `max_link_capacity` en movimientos normales ya cerrado, ver Bloque 4).
 - [x] **Movement costs** — 4 tests nuevos con grafos construidos a mano (normal / restricted / priority / blocked).
@@ -631,9 +634,11 @@ Recorrido sección por sección del PDF de evaluación, añadiendo un test por c
 > [!note] Entorno (2026-07-18)
 > El venv `.fly_in` estaba creado en Linux (`home = /usr/bin`, py 3.10.12, shebangs a `/home/jericard/...`) y no arrancaba en macOS. Recreado con `make install`. `make test` funciona.
 
-#### 8. README
-- [ ] En inglés, con todas las secciones obligatorias: Description, Instructions, Resources, Algorithm, Visual Representation
-- [ ] La hoja de evaluación pide además **"Example input and expected output"** — sección extra que el subject no menciona explícitamente.
+#### 8. README ✅ (2026-07-20)
+- [x] En inglés, con todas las secciones obligatorias: Description, Instructions, Resources (incl. uso de IA), Algorithm, Visual Representation
+- [x] **"Example input and expected output"** incluida (la pide la hoja de evaluación; usa `maps/easy/01_linear_path.txt` con su salida real de 4 turnos).
+- Nota: la sección se llama `Algorithm` (no `Algorithm explanation`). El subject cap. VIII solo exige el **contenido** (*"detailed description of your algorithm choices and implementation strategy"*), no un heading exacto. Decisión del estudiante: no renombrar.
+- El README aclara explícitamente que la planificación (pathfinding) es dron por dron pero la **ejecución es simultánea**, para cubrir el requisito "drones move simultaneously" y la pregunta de defensa.
 
 #### 9. `.gitignore` + limpiar el repositorio ✅ (2026-07-18)
 
@@ -653,11 +658,17 @@ Recorrido sección por sección del PDF de evaluación, añadiendo un test por c
 > Sigue trackeado (7 archivos). El estudiante dijo que **no es entregable**, pero no se ha sacado del repo. Igual pasa con `DEFENSA.md`, que ahora está en la raíz y **sin trackear**. Si no se entregan, van al `.gitignore` o se sacan con `git rm -r --cached workflow`.
 > Recordar que `workflow/test_example.py` es lo que dispara el `E999` de flake8 (ver paso 5).
 
-### Revisión final
+### Revisión final ✅ (2026-07-20)
 
-- [ ] Verificar contra la evaluation sheet y con el texto subrayado del subject
-- [ ] Proyecto revisado contra requisitos
-- [ ] Reporte generado
+- [x] Verificado contra la evaluation sheet completa: OOP, `flake8`, `mypy --strict`, grafo custom, parser + error handling (12 casos malformados → `ValueError`/`OSError`, todos capturados por `menu()`), formato de output, 19 tests, rendimiento (**todos los targets; challenger 43<45** → bonus exceptional performance).
+- [x] Proyecto revisado contra requisitos.
+- [x] Bugs corregidos: (a) **crash `EOFError`/`KeyboardInterrupt`** en `fly.py:menu()` — era el flag "uncontrolled termination = nota 0"; ahora imprime `"The simulation was stopped abruptly"` (y se borró el `except FileNotFoundError` muerto); (b) **opción de menú inválida** muda → `case _: raise ValueError("Wrong option!")`.
+
+### Pendiente antes de / durante la entrega (no bloqueante)
+
+- [ ] **Quitar del repo** (lo hace el estudiante justo antes de entregar): `fly-in.pdf`, `Flyin-ev.pdf`, `workflow/`, `DEFENSA.md`.
+- [ ] **En 42:** `requirements.txt` `pygame-ce` → `pygame`; `make lint` y decidir los `# type: ignore` de `view.py:50,52`.
+- [ ] **Ensayar** el live coding `--capacity-info` (guía en `DEFENSA.md` §12).
 
 ### Repaso final del estudiante (post-entrega)
 

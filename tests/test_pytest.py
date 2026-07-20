@@ -14,18 +14,12 @@ TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 
 @pytest.fixture
 def simulation() -> Simulation:
-    folder: str = "extra"
-    blocked: str = "for_blocked_tests.txt"
     normal: str = "for_normla_tests.txt"
-    map_: str = normal
-    sim: Simulation
+    route: str = os.path.join(TEST_DIR, "..", "maps", "extra", normal)
     graph: Graph
     drones: List[Drone]
-    route: str = ""
-    route = os.path.join(TEST_DIR, "..", "maps", folder,
-                            map_)
     graph, drones = Parser(route).manufacturing()
-    sim = Simulation(graph, drones)
+    sim: Simulation = Simulation(graph, drones)
     sim.simulating()
     return sim
 
@@ -48,14 +42,14 @@ def test_capacity_respected(simulation: Simulation) -> None:
             if turn >= len(drone.path):
                 continue
             pos = drone.path[turn]
-            if turn != 0 and (isinstance(pos, Zone) and
-                              isinstance(drone.path[turn - 1], Zone)
-                              ):
-                if drone.path[turn] != drone.path[turn - 1]:
-                    conn = pos.get_connection(drone.path[turn - 1])
+            if turn != 0:
+                prev = drone.path[turn - 1]
+                if (isinstance(pos, Zone) and isinstance(prev, Zone)
+                        and pos != prev):
+                    conn = pos.get_connection(prev)
                     if conn is not None:
                         conn_count[conn.name] = (
-                            conn_count.get(conn.name, 0) + 1)                    
+                            conn_count.get(conn.name, 0) + 1)
             if isinstance(pos, Zone):
                 zone_count[pos.name] = (
                     zone_count.get(pos.name, 0) + 1)
@@ -64,9 +58,9 @@ def test_capacity_respected(simulation: Simulation) -> None:
                     conn_count.get(pos.name, 0) + 1)
         for name, count in zone_count.items():
             if name in zone_limits and sim.graph.zones[name].relevant:
-                assert count >= zone_limits[name], (f"T{turn}: start or goal zone"
-                                                    "cannot handle multiple drones at the same time!"
-                                                    )
+                assert count >= zone_limits[name], (
+                    f"T{turn}: start or goal zone cannot handle "
+                    f"multiple drones at the same time!")
                 continue
             if name in zone_limits:
                 assert count <= zone_limits[name], (
@@ -112,25 +106,29 @@ def test_paths_are_valid(simulation: Simulation) -> None:
             elif (isinstance(prev, Zone)
                   and isinstance(current, Connection)):
                 other = current.get_otherside_zone(prev)
-                assert other is not None and other.zone_type == "restricted", (
-                    f"{drone.id} T{i}: '{prev.name}' is not part "
-                    f"of connection '{current.name} or wrong restricted zone {other.zone_type if isinstance(other, Zone) else 'Error verifying zone'}'")
+                assert (other is not None
+                        and other.zone_type == "restricted"), (
+                    f"{drone.id} T{i}: '{prev.name}' is not part of "
+                    f"connection '{current.name}' or target zone is "
+                    f"not restricted")
             elif (isinstance(prev, Connection)
                   and isinstance(current, Zone)):
                 other = prev.get_otherside_zone(current)
-                assert other is not None and current.zone_type == "restricted", (
-                    f"{drone.id} T{i}: '{current.name}' is not "
-                    f"part of connection '{prev.name} or wrong restricted zone {current.zone_type}'")
+                assert (other is not None
+                        and current.zone_type == "restricted"), (
+                    f"{drone.id} T{i}: '{current.name}' is not part "
+                    f"of connection '{prev.name}' or zone is not "
+                    f"restricted")
             else:
                 pytest.fail(
                     f"{drone.id} T{i}: two consecutive "
                     f"Connections in path")
 
 
-
 # ============================================================
 # Movement costs
 # ============================================================
+
 
 def _link(graph: Graph, zone1: Zone, zone2: Zone) -> Connection:
     """Build a connection and register it in the graph and both zones."""

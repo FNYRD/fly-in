@@ -232,20 +232,30 @@ Secciones obligatorias:
 
 ## Briefing para el siguiente agente
 
-**Fecha:** 2026-07-18 (actualizado)
+**Fecha:** 2026-07-20 (actualizado)
 
 ### Qué se hizo
 
 - FASE 0, FASE 1 y FASE 2 completas.
-- FASE 3 en progreso:
+- FASE 3 **prácticamente cerrada**:
   - **Paso 0 (Dead code):** ✅
   - **Paso 1 (Mover a raíz):** ✅
   - **Paso 2 (Pygame):** ✅ menú, zonas con nombres, conexiones, drones cuadricóptero, controles manual/auto.
-  - **Paso 3 (Main + Docstrings):** ✅ `fly.py` OOP (clase `TerminalSim`) con menú terminal/pygame, excepciones `(ValueError, OSError, RuntimeError)`. Docstrings Google style en 9 archivos. `view.py` OOP (clase `View`). Parser: validación mínimo una conexión, `startswith("#")`.
+  - **Paso 3 (Main + Docstrings):** ✅ `fly.py` OOP (clase `TerminalSim`) con menú terminal/pygame. Docstrings Google style en 9 archivos. `view.py` OOP (clase `View`). Parser: validación mínimo una conexión, `startswith("#")`.
   - **Paso 4 (Makefile):** ✅ 7 reglas completas (`install`, `run`, `debug`, `clean`, `test`, `lint`, `lint-strict`), todas con venv `.fly_in`, tests excluidos de lint.
   - **Paso 5 (Linting):** ✅ `flake8`, `mypy` y `lint-strict` pasan sin errores.
   - **Paso 6 (Opción terminal/pygame):** ✅ menú en `fly.py`.
-  - **Paso 7 (Tests contra la hoja de evaluación `Flyin-ev.pdf`):** 🔄 en curso. 19 tests pasando. Cubiertas: Zone occupancy, Movement costs (4 tests con grafos a mano), Connection capacity, formato de output. Visual Representation verificada a mano (se defiende en vivo). Pendientes: Edge cases / error handling, y ensayar el Live Coding (`--capacity-info`).
+  - **Paso 7 (Tests contra la hoja de evaluación `Flyin-ev.pdf`):** ✅ cerrado. 19 tests pasando. Cubiertas: Zone occupancy, Movement costs (4 tests con grafos a mano), Connection capacity, formato de output. Edge cases / error handling se demuestran en vivo (no automatizados). Visual Representation verificada a mano. **Tests refactorizados (2026-07-20): tipado completo, `flake8` + `mypy --strict` limpios** por coherencia con el resto del proyecto (aunque no son entregable).
+  - **Paso 8 (README):** ✅ escrito completo en inglés (2026-07-20), 7 secciones: Description, Instructions, Resources (incl. uso de IA), Algorithm, Visual Representation, Example input/output. La sección se llama `Algorithm` (el subject solo pide el contenido, no un heading exacto; decisión del estudiante).
+  - **Paso 9 (`.gitignore` + limpiar repo):** ✅ commiteado. Venv desindexado (3415 → 33 archivos trackeados).
+
+### Revisión final (2026-07-20)
+
+Recorrida la evaluation sheet completa. Verificado: OOP, `flake8`, `mypy --strict`, grafo custom, parser + error handling (12 casos malformados → `ValueError`/`OSError`, todos capturados), formato de output, 19 tests, rendimiento (**todos los targets; challenger 43<45** → bonus exceptional performance cubierto).
+
+**Bugs encontrados y corregidos en la revisión:**
+- **Crash `EOFError`/`KeyboardInterrupt`** (Ctrl-D / Ctrl-C) no capturado en `fly.py:menu()` → traceback no controlado = flag nota 0 de la hoja. Corregido con `except (EOFError, KeyboardInterrupt): print("The simulation was stopped abruptly")`. De paso se borró el `except FileNotFoundError` final (código muerto, ya cubierto en la tupla de arriba).
+- **Opción de menú inválida** (ej. `3`) quedaba muda → añadido `case _: raise ValueError("Wrong option!")`.
 
 ### Estructura de archivos actual
 
@@ -282,14 +292,14 @@ fly_in/
 
 ### Siguiente paso
 
-Por orden de prioridad:
+El proyecto se dio por **cerrado** (2026-07-20). Todo lo obligatorio está hecho. Pendiente antes de / durante la entrega:
 
-1. **README en inglés**, hoy vacío (0 bytes): Description, Instructions, Resources (incluida la descripción del uso de IA, obligatoria), Algorithm, Visual Representation, y "Example input and expected output" que pide la hoja. **Es el único requisito duro que falta.**
-2. **Decidir si `workflow/` y `DEFENSA.md` se entregan.** `workflow/` sigue trackeado (7 archivos); `DEFENSA.md` está en la raíz sin trackear. Ambos son documentación interna en español.
+1. **Quitar del repo antes de entregar** (lo hace el estudiante): `fly-in.pdf`, `Flyin-ev.pdf` (subject y hoja de evaluación, riesgo del flag "only requested files"), la carpeta `workflow/` y `DEFENSA.md`. Se necesitan en el repo hasta justo antes de la entrega, por eso no se han sacado aún.
+2. **En la máquina de 42:** cambiar `requirements.txt` de `pygame-ce` → `pygame`; correr `make lint` y decidir los `# type: ignore[attr-defined]` de `view.py:50,52` (sobran con pygame-ce, pueden ser necesarios con los stubs de pygame).
 3. **Ensayar el live coding** `--capacity-info` sobre una copia del proyecto (guía en `DEFENSA.md` §12).
-4. **Revisión final** contra la evaluation sheet y el texto subrayado del subject.
 
-Los tests contra la hoja de evaluación se dieron por cerrados: los casos de error del parser y los edge cases se demuestran en vivo editando el mapa, no necesitan tests automatizados (los tests ni siquiera son entregable).
+> [!note] Entorno (2026-07-20)
+> El venv `.fly_in` se había borrado del disco; recreado con `make install`. `make test` / `make lint` funcionan.
 
 > [!success] RESUELTO (2026-07-18) — `.gitignore` y venv desindexado
 > El venv `.fly_in/` estaba commiteado entero (3371 de 3415 archivos trackeados) y no había `.gitignore`, que el subject exige en III.3. La hoja avisa en Preliminaries: *"Check that only the requested files are available in the git repository. **If not, the evaluation stops here.**"*
