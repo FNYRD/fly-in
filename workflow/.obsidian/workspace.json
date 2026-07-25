@@ -4,39 +4,24 @@
     "type": "split",
     "children": [
       {
-        "id": "55fd0a0dbb234b68",
+        "id": "1150a6d1b210c5ae",
         "type": "tabs",
         "children": [
           {
-            "id": "962953e875ad17c6",
+            "id": "6a927c94e655507a",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "PROJECT.md",
+                "file": "Posible mejoras al sistema.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "PROJECT"
-            }
-          },
-          {
-            "id": "0a35b5ccca5b865a",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "HANDOFF.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "HANDOFF"
+              "title": "Posible mejoras al sistema"
             }
           }
-        ],
-        "currentTab": 1
+        ]
       }
     ],
     "direction": "vertical"
@@ -195,15 +180,17 @@
       "bases:Crear nueva base": false
     }
   },
-  "active": "0a35b5ccca5b865a",
+  "active": "6a927c94e655507a",
   "lastOpenFiles": [
+    "Sin título.md",
+    "Sin nombre",
     "SYSTEM.md",
-    "Posible mejoras al sistema.md",
     "PROJECT.md",
+    "HANDOFF.md",
+    "Posible mejoras al sistema.md",
     "test_example.py",
     "test_bloque_1.py",
     "SYSTEM.md.tmp.32494.036991b235ea",
-    "PROJECT.md.tmp.18180.b8ace7608584",
-    "HANDOFF.md"
+    "PROJECT.md.tmp.18180.b8ace7608584"
   ]
 }

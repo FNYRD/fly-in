@@ -73,7 +73,7 @@ class Simulation:
                                 else:
                                     (self.reservations[i]
                                      [connection_name.name]) += 1
-                            else:
+                             else:
                                 raise RuntimeError(
                                     "The order calculated by dijkstra() "
                                     "is wrong. Two consecutives zones without "
