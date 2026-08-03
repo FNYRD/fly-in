@@ -73,7 +73,7 @@ class Simulation:
                                 else:
                                     (self.reservations[i]
                                      [connection_name.name]) += 1
-                             else:
+                            else:
                                 raise RuntimeError(
                                     "The order calculated by dijkstra() "
                                     "is wrong. Two consecutives zones without "
@@ -116,9 +116,24 @@ class Simulation:
                 self.calculating_reservations(path)
                 self.populate_logs(drone, path)
 
-    def output(self) -> None:
+
+    def show(self, turn) -> None:
+        if not self.reservations:
+            return
+        for name, count in self.reservations.get(turn, {}).items():
+            if name in self.graph.zones:
+                zone = self.graph.zones[name]
+                capacity = "unlimited" if zone.relevant else zone.max_drones
+                print(f"Zone {zone.name}: {count} / {capacity}")
+            else:
+                conne = next(c for c in self.graph.connections if c.name == name)
+                print(f"Connection {conne.name}: {count} / {conne.max_link_capacity}")
+
+    def output(self, capacity_info: bool) -> None:
         """Print the simulation log, one line per turn."""
-        for logs in self.logs:
+        for i, logs in enumerate(self.logs):
             for log in logs:
                 print(log, end=" ")
             print()
+            if capacity_info:
+                self.show(i + 1)

@@ -14,7 +14,7 @@ TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 
 @pytest.fixture
 def simulation() -> Simulation:
-    normal: str = "for_normla_tests.txt"
+    normal: str = "for_normal_tests.txt"
     route: str = os.path.join(TEST_DIR, "..", "maps", "extra", normal)
     graph: Graph
     drones: List[Drone]

@@ -46,10 +46,8 @@ class View:
         """Initialize pygame, screen dimensions, and background."""
         pygame.init()
         screen_info = pygame.display.Info()
-        self.max_w: int = screen_info.current_w - \
-            100  # type: ignore[attr-defined]
-        self.max_h: int = screen_info.current_h - \
-            100  # type: ignore[attr-defined]
+        self.max_w: int = screen_info.current_w - 100
+        self.max_h: int = screen_info.current_h - 100
         self.menu_w: int = min(800, self.max_w)
         self.menu_h: int = min(600, self.max_h)
         self.screen: pygame.Surface = pygame.display.set_mode(

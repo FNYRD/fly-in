@@ -6,6 +6,7 @@ from parser import Parser
 from simulation import Simulation
 from typing import List, Tuple
 from view import View
+import sys
 
 
 class TerminalSim:
@@ -51,28 +52,43 @@ class TerminalSim:
             raise ValueError("Wrong option!")
         return directory, maps_directory, level, file
 
-    def terminal_sim(self) -> None:
+    def terminal_sim(self, route: str = "", capacity_info: bool = False) -> None:
         """Entry point: select map, parse, simulate, and print output."""
-        dictory: str = ""
-        dir_map: str = ""
-        level: str = ""
-        map: str = ""
-        dictory, dir_map, level, map = self._get_maps()
-        route = os.path.join(dictory, dir_map, level, map)
+        if not route:
+            dictory: str = ""
+            dir_map: str = ""
+            level: str = ""
+            map: str = ""
+            dictory, dir_map, level, map = self._get_maps()
+            route = os.path.join(dictory, dir_map, level, map)
         graph: Graph
         drones: List[Drone]
         graph, drones = Parser(route).manufacturing()
         sim: Simulation = Simulation(graph, drones)
         sim.simulating()
         print(f"Total turns {len(sim.logs)}\n")
-        sim.output()
+        sim.output(capacity_info)
 
 
 def menu() -> None:
     """Prompt user to choose terminal or pygame mode and run."""
     try:
-        view: View = View()
         terminal: TerminalSim = TerminalSim()
+        route: str = ""
+        capacity_info: bool = False
+        for arg in sys.argv[1:]:
+            if arg == "--capacity-info":
+                capacity_info = True
+            elif not route:
+                route = arg
+            else:
+                raise ValueError("error arg")
+        if route:
+            terminal.terminal_sim(route, capacity_info)
+            return
+        if capacity_info:
+            raise ValueError("error")
+        view: View = View()
         option: int = 0
         print("\nFor terminal simulation press: 1\n"
               "For pygame simulation press: 2")
